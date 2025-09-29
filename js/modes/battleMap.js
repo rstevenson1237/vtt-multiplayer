@@ -1,3 +1,5 @@
+import { BattleMapUI } from './battleMapUI.js';
+
 export class BattleMapMode {
     constructor(eventBus, realtimeSync) {
         this.eventBus = eventBus;
@@ -12,6 +14,12 @@ export class BattleMapMode {
         this.currentUser = null;
         this.userRole = null;
         this.gameId = null;
+        this.backgroundImage = null;
+        this.measuring = false;
+        this.measureStart = null;
+        this.measureEnd = null;
+        this.currentTurn = null;
+        this.combatActive = false;
     }
 
     initialize(gameId, user, role) {
@@ -35,6 +43,23 @@ export class BattleMapMode {
             this.showGrid = showGrid !== false;
             this.draw();
         });
+
+        // Listen for combat state
+        this.sync.listenToData('battleMap/combat', (combat) => {
+            this.combatActive = combat?.active || false;
+            this.currentTurn = combat?.currentTurn || null;
+            this.updateCombatUI();
+        });
+
+        // Listen for background
+        this.sync.listenToData('battleMap/background', (bg) => {
+            if (bg?.url) {
+                this.loadBackground(bg.url);
+            }
+        });
+
+        // Add context menu handler
+        this.canvas.addEventListener('contextmenu', (e) => this.onRightClick(e));
     }
 
     setupCanvas() {
@@ -46,11 +71,22 @@ export class BattleMapMode {
     draw() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
+        // Draw background image first
+        if (this.backgroundImage) {
+            this.ctx.drawImage(
+                this.backgroundImage, 
+                0, 0, 
+                this.canvas.width, 
+                this.canvas.height
+            );
+        }
+        
         if (this.showGrid) {
             this.drawGrid();
         }
         
         this.drawTokens();
+        this.drawMeasurement();
     }
 
     drawGrid() {
@@ -77,125 +113,408 @@ export class BattleMapMode {
             // Draw token
             this.ctx.fillStyle = token.color || '#3498db';
             this.ctx.beginPath();
-            this.ctx.arc(token.x, token.y, token.size || 20, 0, Math.PI * 2);
+            this.ctx.arc(token.x, token.y, token.size || 25, 0, Math.PI * 2);
             this.ctx.fill();
+            
+            // Draw current turn indicator
+            if (this.currentTurn === id && this.combatActive) {
+                this.ctx.strokeStyle = '#f39c12';
+                this.ctx.lineWidth = 4;
+                this.ctx.setLineDash([5, 5]);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+            }
             
             // Draw selection highlight
             if (this.selectedToken === id) {
-                this.ctx.strokeStyle = '#f39c12';
+                this.ctx.strokeStyle = '#e74c3c';
                 this.ctx.lineWidth = 3;
                 this.ctx.stroke();
             }
             
             // Draw label
-            this.ctx.fillStyle = '#000';
-            this.ctx.font = '12px Arial';
+            this.ctx.fillStyle = '#fff';
+            this.ctx.strokeStyle = '#000';
+            this.ctx.lineWidth = 3;
+            this.ctx.font = 'bold 12px Arial';
             this.ctx.textAlign = 'center';
-            this.ctx.fillText(token.name, token.x, token.y + 35);
+            this.ctx.strokeText(token.name, token.x, token.y + (token.size || 25) + 15);
+            this.ctx.fillText(token.name, token.x, token.y + (token.size || 25) + 15);
             
             // Draw HP bar
             if (token.hp !== undefined && token.maxHp) {
-                const barWidth = 40;
-                const barHeight = 4;
-                const hpPercent = token.hp / token.maxHp;
+                const barWidth = (token.size || 25) * 2;
+                const barHeight = 6;
+                const hpPercent = Math.max(0, token.hp / token.maxHp);
+                const barY = token.y - (token.size || 25) - 10;
                 
-                this.ctx.fillStyle = '#e74c3c';
-                this.ctx.fillRect(token.x - barWidth/2, token.y - 30, barWidth, barHeight);
+                // Background
+                this.ctx.fillStyle = '#000';
+                this.ctx.fillRect(token.x - barWidth/2, barY, barWidth, barHeight);
                 
-                this.ctx.fillStyle = '#27ae60';
-                this.ctx.fillRect(token.x - barWidth/2, token.y - 30, barWidth * hpPercent, barHeight);
+                // HP bar
+                let barColor = '#27ae60';
+                if (hpPercent < 0.3) barColor = '#e74c3c';
+                else if (hpPercent < 0.6) barColor = '#f39c12';
+                
+                this.ctx.fillStyle = barColor;
+                this.ctx.fillRect(token.x - barWidth/2, barY, barWidth * hpPercent, barHeight);
+                
+                // HP text
+                this.ctx.fillStyle = '#fff';
+                this.ctx.strokeStyle = '#000';
+                this.ctx.font = 'bold 10px Arial';
+                this.ctx.lineWidth = 2;
+                const hpText = `${token.hp}/${token.maxHp}`;
+                this.ctx.strokeText(hpText, token.x, barY + 4);
+                this.ctx.fillText(hpText, token.x, barY + 4);
+            }
+            
+            // Draw AC badge
+            if (token.ac) {
+                const acSize = 16;
+                const acX = token.x + (token.size || 25);
+                const acY = token.y - (token.size || 25);
+                
+                this.ctx.fillStyle = '#2c3e50';
+                this.ctx.beginPath();
+                this.ctx.arc(acX, acY, acSize/2, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                this.ctx.fillStyle = '#fff';
+                this.ctx.font = 'bold 10px Arial';
+                this.ctx.fillText(token.ac, acX, acY + 3);
+            }
+            
+            // Draw conditions
+            if (token.conditions && token.conditions.length > 0) {
+                const condY = token.y + (token.size || 25) + 25;
+                this.ctx.font = '10px Arial';
+                this.ctx.fillStyle = '#9b59b6';
+                const condText = token.conditions.slice(0, 2).join(', ');
+                this.ctx.fillText(condText, token.x, condY);
+                
+                if (token.conditions.length > 2) {
+                    this.ctx.fillText(`+${token.conditions.length - 2} more`, token.x, condY + 12);
+                }
             }
         });
     }
 
-    async rollDice() {
-        const diceType = document.getElementById('diceType').value;
-        const diceCount = parseInt(document.getElementById('diceCount').value) || 1;
-        const modifier = parseInt(document.getElementById('diceModifier').value) || 0;
-        
-        const rolls = [];
-        let total = modifier;
-        
-        for (let i = 0; i < diceCount; i++) {
-            const max = parseInt(diceType.substring(1));
-            const roll = Math.floor(Math.random() * max) + 1;
-            rolls.push(roll);
-            total += roll;
-        }
-        
-        const rollData = {
-            type: diceType,
-            count: diceCount,
-            modifier,
-            rolls,
-            total,
-            roller: this.currentUser.displayName || 'Player',
-            timestamp: Date.now()
-        };
-        
-        // Sync dice roll to Firebase
-        await this.sync.pushItem('battleMap/diceRolls', rollData);
-        
-        // Send to chat
-        this.eventBus.emit('chat:diceRoll', rollData);
+    startMeasure() {
+        this.measuring = true;
+        this.canvas.style.cursor = 'crosshair';
     }
 
-    async addToken() {
-        const name = prompt('Enter token name:');
-        if (!name) return;
-
-        const token = {
-            id: Date.now().toString(),
-            name,
-            x: Math.floor(Math.random() * (this.canvas.width / this.gridSize)) * this.gridSize + this.gridSize/2,
-            y: Math.floor(Math.random() * (this.canvas.height / this.gridSize)) * this.gridSize + this.gridSize/2,
-            size: 20,
-            color: `hsl(${Math.random() * 360}, 70%, 50%)`,
-            hp: 10,
-            maxHp: 10,
-            initiative: Math.floor(Math.random() * 20) + 1,
-            owner: this.currentUser.uid,
-            ownerName: this.currentUser.displayName || 'Player'
-        };
-
-        await this.sync.updateField(`battleMap/tokens/${token.id}`, token);
+    calculateDistance(x1, y1, x2, y2) {
+        const dx = Math.abs(x2 - x1);
+        const dy = Math.abs(y2 - y1);
+        const pixels = Math.sqrt(dx * dx + dy * dy);
+        const squares = pixels / this.gridSize;
+        const feet = squares * 5; // Assuming 5ft squares
+        return { feet, squares, pixels };
     }
 
-    async deleteToken() {
-        if (!this.selectedToken) {
-            alert('Select a token first');
-            return;
-        }
+    drawMeasurement() {
+        if (!this.measuring || !this.measureStart || !this.measureEnd) return;
 
-        const token = this.tokens[this.selectedToken];
+        this.ctx.strokeStyle = '#f39c12';
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([5, 5]);
+
+        this.ctx.beginPath();
+        this.ctx.moveTo(this.measureStart.x, this.measureStart.y);
+        this.ctx.lineTo(this.measureEnd.x, this.measureEnd.y);
+        this.ctx.stroke();
+
+        this.ctx.setLineDash([]);
+
+        // Draw distance label
+        const midX = (this.measureStart.x + this.measureEnd.x) / 2;
+        const midY = (this.measureStart.y + this.measureEnd.y) / 2;
+        const dist = this.calculateDistance(
+            this.measureStart.x, this.measureStart.y,
+            this.measureEnd.x, this.measureEnd.y
+        );
+
+        this.ctx.fillStyle = '#000';
+        this.ctx.font = 'bold 14px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(`${Math.round(dist.feet)} ft`, midX, midY - 10);
+    }
+
+    async loadBackground(imageUrl) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            this.backgroundImage = img;
+            this.draw();
+        };
+        img.src = imageUrl;
+    }
+
+    async uploadBackground() {
+        const url = prompt('Enter background image URL:');
+        if (url) {
+            await this.sync.syncData('battleMap/background', { url });
+        }
+    }
+
+    async clearBackground() {
+        this.backgroundImage = null;
+        await this.sync.removeItem('battleMap/background');
+        this.draw();
+    }
+
+    onRightClick(e) {
+        e.preventDefault();
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        // Find clicked token
+        let clickedTokenId = null;
+        Object.entries(this.tokens).forEach(([id, token]) => {
+            const dist = Math.sqrt((x - token.x) ** 2 + (y - token.y) ** 2);
+            if (dist <= (token.size || 25)) {
+                clickedTokenId = id;
+            }
+        });
+        
+        if (clickedTokenId) {
+            const token = this.tokens[clickedTokenId];
+            BattleMapUI.showTokenContextMenu(e.clientX, e.clientY, token, {
+                onEdit: () => this.editToken(clickedTokenId),
+                onAdjustHP: () => this.adjustTokenHP(clickedTokenId),
+                onRollInitiative: () => this.rollInitiativeForToken(clickedTokenId),
+                onAddCondition: () => this.manageConditions(clickedTokenId),
+                onDuplicate: () => this.duplicateToken(clickedTokenId),
+                onDelete: () => this.deleteTokenById(clickedTokenId)
+            });
+        }
+    }
+
+    async editToken(tokenId) {
+        const token = this.tokens[tokenId];
         if (!token) return;
 
-        // Check permission
-        if (this.userRole !== 'referee' && token.owner !== this.currentUser.uid) {
-            alert('You can only delete your own tokens');
+        BattleMapUI.showTokenEditDialog(token, async (updates) => {
+            await this.sync.updateField(`battleMap/tokens/${tokenId}`, updates);
+        });
+    }
+
+    async adjustTokenHP(tokenId) {
+        const token = this.tokens[tokenId];
+        if (!token) return;
+
+        BattleMapUI.showHPAdjustDialog(token, async (newHP) => {
+            await this.sync.updateField(`battleMap/tokens/${tokenId}`, { hp: newHP });
+            
+            // Send HP change to chat
+            this.eventBus.emit('chat:message', {
+                content: `${token.name}'s HP: ${token.hp} → ${newHP}`,
+                type: 'system'
+            });
+        });
+    }
+
+    async manageConditions(tokenId) {
+        const token = this.tokens[tokenId];
+        if (!token) return;
+
+        BattleMapUI.showConditionDialog(
+            token,
+            token.conditions || [],
+            async (conditions) => {
+                await this.sync.updateField(`battleMap/tokens/${tokenId}`, { conditions });
+            }
+        );
+    }
+
+    async duplicateToken(tokenId) {
+        const token = this.tokens[tokenId];
+        if (!token) return;
+
+        const newToken = {
+            ...token,
+            id: Date.now().toString(),
+            name: `${token.name} (Copy)`,
+            x: token.x + this.gridSize,
+            y: token.y + this.gridSize
+        };
+
+        await this.sync.updateField(`battleMap/tokens/${newToken.id}`, newToken);
+    }
+
+    async deleteTokenById(tokenId) {
+        const token = this.tokens[tokenId];
+        if (!token) return;
+
+        if (confirm(`Delete token "${token.name}"?`)) {
+            await this.sync.removeItem(`battleMap/tokens/${tokenId}`);
+        }
+    }
+
+    async rollInitiativeForToken(tokenId) {
+        const token = this.tokens[tokenId];
+        if (!token) return;
+
+        const roll = Math.floor(Math.random() * 20) + 1;
+        const bonus = token.initiativeBonus || 0;
+        const total = roll + bonus;
+
+        await this.sync.updateField(`battleMap/tokens/${tokenId}`, { 
+            initiative: total,
+            initiativeRoll: roll
+        });
+
+        this.eventBus.emit('chat:message', {
+            content: `${token.name} rolled initiative: ${roll} + ${bonus} = ${total}`,
+            type: 'system'
+        });
+    }
+
+    async rollInitiativeForAll() {
+        const updates = {};
+        Object.entries(this.tokens).forEach(([id, token]) => {
+            const roll = Math.floor(Math.random() * 20) + 1;
+            const bonus = token.initiativeBonus || 0;
+            updates[id] = {
+                initiative: roll + bonus,
+                initiativeRoll: roll
+            };
+        });
+
+        for (const [id, update] of Object.entries(updates)) {
+            await this.sync.updateField(`battleMap/tokens/${id}`, update);
+        }
+
+        this.eventBus.emit('chat:message', {
+            content: 'Initiative rolled for all tokens!',
+            type: 'system'
+        });
+    }
+
+    async startCombat() {
+        // Sort by initiative
+        const sorted = Object.entries(this.tokens)
+            .sort(([, a], [, b]) => (b.initiative || 0) - (a.initiative || 0));
+
+        if (sorted.length === 0) {
+            alert('No tokens on the map!');
             return;
         }
 
-        if (confirm(`Delete token "${token.name}"?`)) {
-            await this.sync.removeItem(`battleMap/tokens/${this.selectedToken}`);
-            this.selectedToken = null;
+        const firstToken = sorted[0][0];
+        await this.sync.syncData('battleMap/combat', {
+            active: true,
+            currentTurn: firstToken,
+            round: 1
+        });
+    }
+
+    async endCombat() {
+        await this.sync.syncData('battleMap/combat', {
+            active: false,
+            currentTurn: null,
+            round: 0
+        });
+    }
+
+    async nextTurn() {
+        if (!this.combatActive) return;
+
+        const sorted = Object.entries(this.tokens)
+            .sort(([, a], [, b]) => (b.initiative || 0) - (a.initiative || 0));
+
+        const currentIndex = sorted.findIndex(([id]) => id === this.currentTurn);
+        const nextIndex = (currentIndex + 1) % sorted.length;
+        const nextToken = sorted[nextIndex][0];
+
+        const combat = await this.sync.db.ref(
+            `games/${this.gameId}/state/battleMap/combat`
+        ).once('value').then(s => s.val());
+
+        await this.sync.syncData('battleMap/combat', {
+            ...combat,
+            currentTurn: nextToken,
+            round: nextIndex === 0 ? (combat.round || 1) + 1 : combat.round || 1
+        });
+
+        this.eventBus.emit('chat:message', {
+            content: `It's now ${this.tokens[nextToken].name}'s turn!`,
+            type: 'system'
+        });
+    }
+
+    async previousTurn() {
+        if (!this.combatActive) return;
+
+        const sorted = Object.entries(this.tokens)
+            .sort(([, a], [, b]) => (b.initiative || 0) - (a.initiative || 0));
+
+        const currentIndex = sorted.findIndex(([id]) => id === this.currentTurn);
+        const prevIndex = currentIndex === 0 ? sorted.length - 1 : currentIndex - 1;
+        const prevToken = sorted[prevIndex][0];
+
+        const combat = await this.sync.db.ref(
+            `games/${this.gameId}/state/battleMap/combat`
+        ).once('value').then(s => s.val());
+
+        await this.sync.syncData('battleMap/combat', {
+            ...combat,
+            currentTurn: prevToken
+        });
+    }
+
+    updateCombatUI() {
+        const startBtn = document.getElementById('startCombatBtn');
+        const endBtn = document.getElementById('endCombatBtn');
+        const nextBtn = document.getElementById('nextTurnBtn');
+        const prevBtn = document.getElementById('prevTurnBtn');
+
+        if (this.combatActive) {
+            startBtn?.classList.add('hidden');
+            endBtn?.classList.remove('hidden');
+            nextBtn?.classList.remove('hidden');
+            prevBtn?.classList.remove('hidden');
+        } else {
+            startBtn?.classList.remove('hidden');
+            endBtn?.classList.add('hidden');
+            nextBtn?.classList.add('hidden');
+            prevBtn?.classList.add('hidden');
         }
-    }
 
-    async toggleGrid() {
-        await this.sync.syncData('battleMap/showGrid', !this.showGrid);
-    }
-
-    clearSelection() {
-        this.selectedToken = null;
+        this.updateInitiativeTracker();
         this.draw();
-        this.updateSelectedTokenInfo();
     }
 
     onMouseDown(e) {
         const rect = this.canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
+        
+        if (this.measuring) {
+            if (!this.measureStart) {
+                this.measureStart = { x, y };
+            } else {
+                this.measureEnd = { x, y };
+                this.measuring = false;
+                this.canvas.style.cursor = 'default';
+                this.draw();
+                
+                // Show distance
+                const dist = this.calculateDistance(
+                    this.measureStart.x, this.measureStart.y,
+                    this.measureEnd.x, this.measureEnd.y
+                );
+                alert(`Distance: ${Math.round(dist.feet)} feet (${dist.squares.toFixed(1)} squares)`);
+                
+                this.measureStart = null;
+                this.measureEnd = null;
+            }
+            return;
+        }
         
         // Find clicked token
         let clickedToken = null;
@@ -228,11 +547,17 @@ export class BattleMapMode {
     }
 
     onMouseMove(e) {
-        if (!this.isDrawing || !this.selectedToken) return;
-        
         const rect = this.canvas.getBoundingClientRect();
         let x = e.clientX - rect.left;
         let y = e.clientY - rect.top;
+        
+        if (this.measuring && this.measureStart) {
+            this.measureEnd = { x, y };
+            this.draw();
+            return;
+        }
+        
+        if (!this.isDrawing || !this.selectedToken) return;
         
         // Snap to grid
         if (this.showGrid) {

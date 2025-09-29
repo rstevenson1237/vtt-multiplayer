@@ -97,23 +97,45 @@
         <!-- Battle Map Mode -->
         <div id="battlemapMode" class="mode-container hidden">
             <div class="toolbar">
-                <button onclick="battleMap.rollDice()">Roll Dice</button>
-                <select id="diceType">
-                    <option value="d4">d4</option>
-                    <option value="d6">d6</option>
-                    <option value="d8">d8</option>
-                    <option value="d10">d10</option>
-                    <option value="d12">d12</option>
-                    <option value="d20">d20</option>
-                    <option value="d100">d100</option>
-                </select>
-                <input type="number" id="diceCount" value="1" min="1" max="10">
-                <input type="number" id="diceModifier" value="0" placeholder="Modifier">
-                <button onclick="battleMap.addToken()">Add Token</button>
-                <button onclick="battleMap.toggleGrid()">Toggle Grid</button>
-                <button onclick="battleMap.clearSelection()">Clear Selection</button>
-                <button onclick="battleMap.deleteToken()" class="danger">Delete Token</button>
-            </div>
+    <!-- Dice Rolling -->
+    <div class="toolbar-section">
+        <button onclick="battleMap.rollDice()">Roll Dice</button>
+        <select id="diceType">
+            <option value="d4">d4</option>
+            <option value="d6">d6</option>
+            <option value="d8">d8</option>
+            <option value="d10">d10</option>
+            <option value="d12">d12</option>
+            <option value="d20">d20</option>
+            <option value="d100">d100</option>
+        </select>
+        <input type="number" id="diceCount" value="1" min="1" max="10">
+        <input type="number" id="diceModifier" value="0" placeholder="Modifier">
+    </div>
+    
+    <!-- Token Management -->
+    <div class="toolbar-section">
+        <button onclick="battleMap.addToken()">Add Token</button>
+        <button onclick="battleMap.clearSelection()">Clear Selection</button>
+    </div>
+    
+    <!-- Combat Controls -->
+    <div class="toolbar-section">
+        <button id="startCombatBtn" onclick="battleMap.startCombat()" class="success">Start Combat</button>
+        <button id="endCombatBtn" onclick="battleMap.endCombat()" class="danger hidden">End Combat</button>
+        <button id="prevTurnBtn" onclick="battleMap.previousTurn()" class="hidden">⬅ Prev</button>
+        <button id="nextTurnBtn" onclick="battleMap.nextTurn()" class="hidden">Next ➡</button>
+        <button onclick="battleMap.rollInitiativeForAll()">Roll All Initiative</button>
+    </div>
+    
+    <!-- View Controls -->
+    <div class="toolbar-section">
+        <button onclick="battleMap.toggleGrid()">Toggle Grid</button>
+        <button onclick="battleMap.startMeasure()">📏 Measure</button>
+        <button onclick="battleMap.uploadBackground()">Set Background</button>
+        <button onclick="battleMap.clearBackground()">Clear Background</button>
+    </div>
+</div>
             <canvas id="battleCanvas" width="1200" height="800"></canvas>
             <div id="battleSidebar" class="battle-sidebar">
                 <div id="initiativeTracker" class="initiative-tracker">

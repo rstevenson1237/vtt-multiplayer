@@ -9,6 +9,7 @@ import { TrackingMode } from './modes/tracking.js';
 import { CharacterMode } from './modes/character.js';
 import { ChatSystem } from './components/chat.js';
 import { EventBus } from './utils/eventBus.js';
+import { BattleMapUI } from './modes/battleMapUI.js';
 
 class VTTApp {
     constructor() {

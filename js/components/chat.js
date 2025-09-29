@@ -26,6 +26,13 @@ export class ChatSystem {
         this.eventBus.on('chat:diceRoll', (rollData) => {
             this.sendDiceRoll(rollData);
         });
+
+        // Listen for system messages
+        this.eventBus.on('chat:message', (data) => {
+            if (data.type === 'system') {
+                this.sendSystemMessage(data.content);
+            }
+        });
     }
 
     async sendMessage() {
@@ -44,6 +51,18 @@ export class ChatSystem {
         
         await this.db.ref(`games/${this.gameId}/messages`).push(message);
         input.value = '';
+    }
+
+    async sendSystemMessage(content) {
+        const message = {
+            author: 'System',
+            authorId: 'system',
+            content,
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
+            type: 'system'
+        };
+        
+        await this.db.ref(`games/${this.gameId}/messages`).push(message);
     }
 
     async sendDiceRoll(rollData) {
