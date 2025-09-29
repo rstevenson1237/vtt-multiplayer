@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment files
+.env
+.env.local
+firebase-config.js
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build files
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+firebase-debug.log*
+
+# Firebase
+.firebase/
+.firebaserc
+
+# Temporary files
+temp/
+tmp/
