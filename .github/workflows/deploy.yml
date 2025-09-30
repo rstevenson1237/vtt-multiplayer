@@ -30,6 +30,9 @@ jobs:
           echo "// Initialize Firebase" >> firebase-config.js
           echo "firebase.initializeApp(firebaseConfig);" >> firebase-config.js
 
+      - name: List files for debugging
+        run: ls -la
+
       - name: Deploy 🚀
         uses: peaceiris/actions-gh-pages@v3
         with:
