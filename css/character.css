@@ -1,0 +1,89 @@
+.character-header {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    align-items: center;
+}
+
+.character-sheet {
+    background-color: white;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.basic-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.attributes {
+    margin-bottom: 2rem;
+}
+
+.attribute-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.attribute {
+    text-align: center;
+    padding: 1rem;
+    background-color: var(--bg-color);
+    border-radius: 4px;
+}
+
+.attribute label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.attribute input {
+    width: 60px;
+    text-align: center;
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+}
+
+.modifier {
+    display: block;
+    font-size: 1.1rem;
+    color: var(--secondary-color);
+    font-weight: bold;
+}
+
+.combat-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.combat-stats label {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.combat-stats input {
+    width: auto;
+    display: inline-block;
+    width: 60px;
+}
+
+.skills, .inventory, .notes {
+    margin-bottom: 1.5rem;
+}
+
+.skills textarea,
+.inventory textarea,
+.notes textarea {
+    min-height: 100px;
+    font-family: inherit;
+}

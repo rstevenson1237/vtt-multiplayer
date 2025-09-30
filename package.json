@@ -1,0 +1,25 @@
+{
+  "name": "vtt-multiplayer",
+  "version": "2.0.0",
+  "description": "Real-time Multiplayer Virtual Tabletop for TTRPGs",
+  "main": "js/app.js",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "dev": "npx live-server",
+    "deploy": "git add . && git commit -m 'Deploy to GitHub Pages' && git push origin main"
+  },
+  "keywords": [
+    "vtt",
+    "ttrpg",
+    "virtual-tabletop",
+    "rpg",
+    "multiplayer",
+    "firebase",
+    "realtime"
+  ],
+  "author": "rstevenson1237",
+  "license": "MIT",
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  }
+}

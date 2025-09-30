@@ -1,0 +1,131 @@
+.tracking-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.tracking-content {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    gap: 2rem;
+    height: calc(100vh - 200px);
+}
+
+.tracking-sidebar {
+    background-color: white;
+    padding: 1rem;
+    border-radius: 4px;
+    overflow-y: auto;
+}
+
+#sessionList {
+    list-style: none;
+    padding: 0;
+}
+
+#sessionList li {
+    padding: 0.75rem;
+    margin: 0.5rem 0;
+    background-color: var(--bg-color);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+#sessionList li:hover {
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+.session-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.entry-count {
+    font-size: 0.875rem;
+    opacity: 0.8;
+}
+
+.tracking-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+#trackingEditor {
+    background-color: white;
+    padding: 1.5rem;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+#trackingEditor textarea {
+    min-height: 150px;
+}
+
+.entry-tags input {
+    margin-bottom: 1rem;
+}
+
+#trackingDisplay {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.tracking-entry {
+    background-color: white;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.entry-header {
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.entry-header h3 {
+    margin-bottom: 0.5rem;
+}
+
+.entry-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.875rem;
+    color: #666;
+}
+
+.entry-content {
+    margin-bottom: 1rem;
+    line-height: 1.6;
+}
+
+.entry-tags {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.tag {
+    background-color: var(--secondary-color);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.entry-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.entry-actions button {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+}

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VTT - Multiplayer Virtual Tabletop</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/auth.css">
+    <link rel="stylesheet" href="css/battlemap.css">
+    <link rel="stylesheet" href="css/mapping.css">
+    <link rel="stylesheet" href="css/tracking.css">
+    <link rel="stylesheet" href="css/character.css">
+    <link rel="stylesheet" href="css/lobby.css">
+    <link rel="stylesheet" href="css/chat.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loader"></div>
+        <p>Connecting to server...</p>
+    </div>
+
+    <!-- Auth Modal -->
+    <div id="authModal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Welcome to VTT Multiplayer</h2>
+            <div id="loginForm">
+                <input type="email" id="email" placeholder="Email (or leave blank for guest)">
+                <input type="password" id="password" placeholder="Password (or leave blank for guest)">
+                <input type="text" id="displayName" placeholder="Display Name" required>
+                <button onclick="auth.login()">Login / Sign Up</button>
+                <button onclick="auth.loginAsGuest()" class="secondary">Continue as Guest</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Lobby -->
+    <div id="gameLobby" class="modal hidden">
+        <div class="modal-content lobby">
+            <h2>Game Lobby</h2>
+            <div class="lobby-user-info">
+                <span>Welcome, <strong id="lobbyUsername"></strong></span>
+                <button onclick="auth.logout()" class="small">Logout</button>
+            </div>
+            
+            <div class="lobby-options">
+                <div class="lobby-section">
+                    <h3>Create New Game</h3>
+                    <input type="text" id="gameName" placeholder="Game Name">
+                    <select id="gameSystem">
+                        <option value="dnd5e">D&D 5e</option>
+                        <option value="pathfinder">Pathfinder</option>
+                        <option value="custom">Custom System</option>
+                    </select>
+                    <button onclick="lobby.createGame()">Create Game</button>
+                </div>
+                
+                <div class="lobby-section">
+                    <h3>Join Existing Game</h3>
+                    <input type="text" id="roomCode" placeholder="Room Code" maxlength="6">
+                    <select id="joinRole">
+                        <option value="player">Player</option>
+                        <option value="viewer">Viewer</option>
+                    </select>
+                    <button onclick="lobby.joinGame()">Join Game</button>
+                </div>
+            </div>
+
+            <div class="recent-games hidden" id="recentGames">
+                <h3>Recent Games</h3>
+                <ul id="recentGamesList"></ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Navigation -->
+    <nav id="mainNav" class="hidden">
+        <div class="nav-brand">
+            <span>VTT System</span>
+            <span class="room-code" id="roomCodeDisplay"></span>
+        </div>
+        <div class="nav-modes">
+            <button class="mode-btn" data-mode="battlemap">Battle Map</button>
+            <button class="mode-btn" data-mode="mapping">Mapping</button>
+            <button class="mode-btn" data-mode="tracking">Tracking</button>
+            <button class="mode-btn" data-mode="character">Character</button>
+        </div>
+        <div class="nav-user">
+            <div class="online-users" id="onlineUsers"></div>
+            <span id="currentUser"></span>
+            <button onclick="game.leaveGame()">Leave Game</button>
+        </div>
+    </nav>
+
+    <!-- Mode Containers -->
+    <main id="appContent" class="hidden">
+        <!-- Battle Map Mode -->
+        <div id="battlemapMode" class="mode-container hidden">
+            <div class="toolbar">
+    <!-- Dice Rolling -->
+    <div class="toolbar-section">
+        <button onclick="battleMap.rollDice()">Roll Dice</button>
+        <select id="diceType">
+            <option value="d4">d4</option>
+            <option value="d6">d6</option>
+            <option value="d8">d8</option>
+            <option value="d10">d10</option>
+            <option value="d12">d12</option>
+            <option value="d20">d20</option>
+            <option value="d100">d100</option>
+        </select>
+        <input type="number" id="diceCount" value="1" min="1" max="10">
+        <input type="number" id="diceModifier" value="0" placeholder="Modifier">
+    </div>
+    
+    <!-- Token Management -->
+    <div class="toolbar-section">
+        <button onclick="battleMap.addToken()">Add Token</button>
+        <button onclick="battleMap.clearSelection()">Clear Selection</button>
+    </div>
+    
+    <!-- Combat Controls -->
+    <div class="toolbar-section">
+        <button id="startCombatBtn" onclick="battleMap.startCombat()" class="success">Start Combat</button>
+        <button id="endCombatBtn" onclick="battleMap.endCombat()" class="danger hidden">End Combat</button>
+        <button id="prevTurnBtn" onclick="battleMap.previousTurn()" class="hidden">⬅ Prev</button>
+        <button id="nextTurnBtn" onclick="battleMap.nextTurn()" class="hidden">Next ➡</button>
+        <button onclick="battleMap.rollInitiativeForAll()">Roll All Initiative</button>
+    </div>
+    
+    <!-- View Controls -->
+    <div class="toolbar-section">
+        <button onclick="battleMap.toggleGrid()">Toggle Grid</button>
+        <button onclick="battleMap.startMeasure()">📏 Measure</button>
+        <button onclick="battleMap.uploadBackground()">Set Background</button>
+        <button onclick="battleMap.clearBackground()">Clear Background</button>
+    </div>
+</div>
+            <canvas id="battleCanvas" width="1200" height="800"></canvas>
+            <div id="battleSidebar" class="battle-sidebar">
+                <div id="initiativeTracker" class="initiative-tracker">
+                    <h3>Initiative Order</h3>
+                    <ul id="initiativeList"></ul>
+                </div>
+                <div id="tokenStats" class="token-stats">
+                    <h3>Selected Token</h3>
+                    <div id="selectedTokenInfo">No token selected</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mapping Mode -->
+        <div id="mappingMode" class="mode-container hidden">
+            <div class="toolbar">
+                <button data-tool="select">Select</button>
+                <button data-tool="rectangle">Rectangle</button>
+                <button data-tool="circle">Circle</button>
+                <button data-tool="polygon">Polygon</button>
+                <button data-tool="line">Line</button>
+                <button data-tool="text">Text</button>
+                <button data-tool="measure">Measure</button>
+                <input type="color" id="drawColor" value="#000000">
+                <input type="number" id="lineWidth" value="2" min="1" max="10">
+                <button onclick="mapping.undo()">Undo</button>
+                <button onclick="mapping.clearCanvas()">Clear All</button>
+            </div>
+            <canvas id="mappingCanvas" width="1200" height="800"></canvas>
+            <div id="measurementDisplay" class="measurement-display"></div>
+        </div>
+
+        <!-- Tracking Mode -->
+        <div id="trackingMode" class="mode-container hidden">
+            <div class="tracking-header">
+                <h2>Campaign Tracking</h2>
+                <button onclick="tracking.addEntry()">Add Entry</button>
+                <button onclick="tracking.exportData()">Export All</button>
+            </div>
+            <div class="tracking-content">
+                <div class="tracking-sidebar">
+                    <h3>Sessions</h3>
+                    <ul id="sessionList"></ul>
+                </div>
+                <div class="tracking-main">
+                    <div id="trackingEditor">
+                        <input type="text" id="entryTitle" placeholder="Entry Title">
+                        <textarea id="entryContent" placeholder="Notes, events, NPCs, locations..."></textarea>
+                        <input type="datetime-local" id="entryDate">
+                        <div class="entry-tags">
+                            <input type="text" id="entryTags" placeholder="Tags (comma-separated)">
+                        </div>
+                        <button onclick="tracking.saveEntry()">Save Entry</button>
+                    </div>
+                    <div id="trackingDisplay"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Character Sheet Mode -->
+        <div id="characterMode" class="mode-container hidden">
+            <div class="character-header">
+                <select id="characterSelect">
+                    <option value="">Select Character</option>
+                </select>
+                <button onclick="character.createNew()">New Character</button>
+                <button onclick="character.saveCharacter()">Save</button>
+                <button onclick="character.shareCharacter()">Share with Party</button>
+                <button onclick="character.exportCharacter()">Export</button>
+            </div>
+            <div class="character-sheet">
+                <div class="basic-info">
+                    <input type="text" id="charName" placeholder="Character Name">
+                    <input type="text" id="charRace" placeholder="Race">
+                    <input type="text" id="charClass" placeholder="Class">
+                    <input type="number" id="charLevel" placeholder="Level" min="1">
+                </div>
+                <div class="attributes">
+                    <h3>Attributes</h3>
+                    <div class="attribute-grid">
+                        <div class="attribute">
+                            <label>STR</label>
+                            <input type="number" id="attrStr" min="1" max="30">
+                            <span class="modifier" id="modStr">+0</span>
+                        </div>
+                        <div class="attribute">
+                            <label>DEX</label>
+                            <input type="number" id="attrDex" min="1" max="30">
+                            <span class="modifier" id="modDex">+0</span>
+                        </div>
+                        <div class="attribute">
+                            <label>CON</label>
+                            <input type="number" id="attrCon" min="1" max="30">
+                            <span class="modifier" id="modCon">+0</span>
+                        </div>
+                        <div class="attribute">
+                            <label>INT</label>
+                            <input type="number" id="attrInt" min="1" max="30">
+                            <span class="modifier" id="modInt">+0</span>
+                        </div>
+                        <div class="attribute">
+                            <label>WIS</label>
+                            <input type="number" id="attrWis" min="1" max="30">
+                            <span class="modifier" id="modWis">+0</span>
+                        </div>
+                        <div class="attribute">
+                            <label>CHA</label>
+                            <input type="number" id="attrCha" min="1" max="30">
+                            <span class="modifier" id="modCha">+0</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="combat-stats">
+                    <h3>Combat Stats</h3>
+                    <label>HP: <input type="number" id="currentHp"> / <input type="number" id="maxHp"></label>
+                    <label>AC: <input type="number" id="armorClass"></label>
+                    <label>Initiative: <input type="number" id="initiative"></label>
+                    <label>Speed: <input type="number" id="speed" placeholder="30"></label>
+                </div>
+                <div class="skills">
+                    <h3>Skills & Proficiencies</h3>
+                    <textarea id="skills" placeholder="List skills and proficiencies..."></textarea>
+                </div>
+                <div class="inventory">
+                    <h3>Inventory</h3>
+                    <textarea id="inventory" placeholder="List items here..."></textarea>
+                </div>
+                <div class="notes">
+                    <h3>Notes</h3>
+                    <textarea id="charNotes" placeholder="Character notes, backstory, etc..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Panel -->
+        <div id="chatPanel" class="chat-panel">
+            <div class="chat-header">
+                <span>Chat</span>
+                <button onclick="chat.toggleChat()" class="small">Hide</button>
+            </div>
+            <div id="chatMessages" class="chat-messages"></div>
+            <div class="chat-input">
+                <input type="text" id="chatInput" placeholder="Type a message...">
+                <button onclick="chat.sendMessage()">Send</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
+    <!-- Load Firebase Config (create this file with your config) -->
+    <script src="firebase-config.js"></script>
+    
+    <!-- Load JavaScript Modules -->
+    <script src="js/app.js" type="module"></script>
+</body>
+</html>
