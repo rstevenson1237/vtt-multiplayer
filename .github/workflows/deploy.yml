@@ -31,13 +31,11 @@ jobs:
           echo "firebase.initializeApp(firebaseConfig);" >> firebase-config.js
 
       - name: Deploy to gh-pages
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git init -b gh-pages
+          git checkout --orphan gh-pages-deploy
           git add -A
+          git add -f firebase-config.js
           git commit -m "Deploy to GitHub Pages"
-          git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+          git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages-deploy:gh-pages
