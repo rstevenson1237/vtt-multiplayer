@@ -186,30 +186,46 @@ class VTTApp {
         this.showAuthModal();
     }
 
-    switchMode(modeName) {
-        // Hide all modes
-        document.querySelectorAll('.mode-container').forEach(container => {
-            container.classList.add('hidden');
-        });
+switchMode(modeName) {
+    // Hide all modes
+    document.querySelectorAll('.mode-container').forEach(container => {
+        container.classList.add('hidden');
+    });
+    
+    // Remove active state from all buttons
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected mode
+    if (modeName && this.modes[modeName]) {
+        document.getElementById(`${modeName}Mode`).classList.remove('hidden');
+        document.querySelector(`[data-mode="${modeName}"]`).classList.add('active');
         
-        // Remove active state from all buttons
-        document.querySelectorAll('.mode-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        
-        // Show selected mode
-        if (modeName && this.modes[modeName]) {
-            document.getElementById(`${modeName}Mode`).classList.remove('hidden');
-            document.querySelector(`[data-mode="${modeName}"]`).classList.add('active');
-            
-            // Activate mode
-            if (this.modes[modeName].activate) {
-                this.modes[modeName].activate();
-            }
-            
-            this.currentMode = modeName;
+        // Activate mode
+        if (this.modes[modeName].activate) {
+            this.modes[modeName].activate();
         }
+        
+        // NEW: Show helper tooltip for battlemap on first visit
+        if (modeName === 'battlemap' && !localStorage.getItem('battlemapHelperSeen')) {
+            setTimeout(() => {
+                const helper = document.getElementById('battleMapHelper');
+                if (helper) {
+                    helper.classList.remove('hidden');
+                    localStorage.setItem('battlemapHelperSeen', 'true');
+                    
+                    // Auto-hide after 10 seconds
+                    setTimeout(() => {
+                        helper.classList.add('hidden');
+                    }, 10000);
+                }
+            }, 500);
+        }
+        
+        this.currentMode = modeName;
     }
+}
 }
 
 // Initialize app when DOM is ready

@@ -1,45 +1,52 @@
 export class BattleMapUI {
-    static showTokenContextMenu(x, y, token, callbacks) {
-        // Remove existing menu
-        const existing = document.getElementById('tokenContextMenu');
-        if (existing) existing.remove();
+static showTokenContextMenu(x, y, token, callbacks) {
+    // Remove existing menu
+    const existing = document.getElementById('tokenContextMenu');
+    if (existing) existing.remove();
 
-        const menu = document.createElement('div');
-        menu.id = 'tokenContextMenu';
-        menu.className = 'context-menu';
-        menu.style.left = `${x}px`;
-        menu.style.top = `${y}px`;
+    const menu = document.createElement('div');
+    menu.id = 'tokenContextMenu';
+    menu.className = 'context-menu';
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
 
-        const menuItems = [
-            { label: 'Edit Token', action: () => callbacks.onEdit(token) },
-            { label: 'Adjust HP', action: () => callbacks.onAdjustHP(token) },
-            { label: 'Roll Initiative', action: () => callbacks.onRollInitiative(token) },
-            { label: 'Add Condition', action: () => callbacks.onAddCondition(token) },
-            { label: 'Duplicate', action: () => callbacks.onDuplicate(token) },
-            { label: 'Delete', action: () => callbacks.onDelete(token), className: 'danger' }
-        ];
+    const menuItems = [
+        { label: '✏️ Edit Token', action: () => callbacks.onEdit(token), description: 'Change name, stats, color' },
+        { label: '❤️ Adjust HP', action: () => callbacks.onAdjustHP(token), description: 'Quick HP changes' },
+        { label: '🎲 Roll Initiative', action: () => callbacks.onRollInitiative(token), description: 'Roll for combat order' },
+        { label: '🎭 Conditions', action: () => callbacks.onAddCondition(token), description: 'Add/remove status effects' },
+        { label: '📋 Duplicate', action: () => callbacks.onDuplicate(token), description: 'Create a copy' },
+        { label: '🗑️ Delete', action: () => callbacks.onDelete(token), className: 'danger', description: 'Remove token' }
+    ];
 
-        menuItems.forEach(item => {
-            const menuItem = document.createElement('div');
-            menuItem.className = `context-menu-item ${item.className || ''}`;
-            menuItem.textContent = item.label;
-            menuItem.onclick = () => {
-                item.action();
-                menu.remove();
-            };
-            menu.appendChild(menuItem);
-        });
+    menuItems.forEach(item => {
+        const menuItem = document.createElement('div');
+        menuItem.className = `context-menu-item ${item.className || ''}`;
+        menuItem.innerHTML = `
+            <div style="display: flex; flex-direction: column;">
+                <strong>${item.label}</strong>
+                ${item.description ? `<small style="color: #666; font-size: 0.85em;">${item.description}</small>` : ''}
+            </div>
+        `;
+        menuItem.onclick = () => {
+            item.action();
+            menu.remove();
+        };
+        menu.appendChild(menuItem);
+    });
 
-        document.body.appendChild(menu);
+    document.body.appendChild(menu);
 
-        // Close on click outside
-        setTimeout(() => {
-            document.addEventListener('click', function closeMenu() {
+    // Close on click outside
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu(e) {
+            if (!menu.contains(e.target)) {
                 menu.remove();
                 document.removeEventListener('click', closeMenu);
-            });
-        }, 0);
-    }
+            }
+        });
+    }, 0);
+}
 
     static showTokenEditDialog(token, onSave) {
         const dialog = document.createElement('div');

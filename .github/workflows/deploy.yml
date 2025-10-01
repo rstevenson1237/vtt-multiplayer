@@ -3,16 +3,14 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main  # Or your default branch
+      - main
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout 🛎️
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Create Firebase Config 🤫
         run: |
@@ -30,12 +28,12 @@ jobs:
           echo "// Initialize Firebase" >> firebase-config.js
           echo "firebase.initializeApp(firebaseConfig);" >> firebase-config.js
 
-      - name: Deploy to gh-pages
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout --orphan gh-pages-deploy
-          git add -A
-          git add -f firebase-config.js
-          git commit -m "Deploy to GitHub Pages"
-          git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages-deploy:gh-pages
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
+          force_orphan: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: 'Deploy to GitHub Pages'

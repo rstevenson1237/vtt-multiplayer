@@ -97,57 +97,100 @@
         <!-- Battle Map Mode -->
         <div id="battlemapMode" class="mode-container hidden">
             <div class="toolbar">
-    <!-- Dice Rolling -->
-    <div class="toolbar-section">
-        <button onclick="battleMap.rollDice()">Roll Dice</button>
-        <select id="diceType">
-            <option value="d4">d4</option>
-            <option value="d6">d6</option>
-            <option value="d8">d8</option>
-            <option value="d10">d10</option>
-            <option value="d12">d12</option>
-            <option value="d20">d20</option>
-            <option value="d100">d100</option>
-        </select>
-        <input type="number" id="diceCount" value="1" min="1" max="10">
-        <input type="number" id="diceModifier" value="0" placeholder="Modifier">
+        <!-- Token Management -->
+        <div class="toolbar-section">
+            <button onclick="battleMap.addToken()" class="success" title="Add a new token to the map">
+                ➕ Add Token
+            </button>
+            <button onclick="battleMap.clearSelection()" title="Deselect current token">
+                Clear Selection
+            </button>
+        </div>
+        
+        <!-- Dice Rolling -->
+        <div class="toolbar-section">
+            <button onclick="battleMap.rollDice()" title="Roll dice">
+                🎲 Roll
+            </button>
+            <select id="diceType" title="Dice type">
+                <option value="d4">d4</option>
+                <option value="d6">d6</option>
+                <option value="d8">d8</option>
+                <option value="d10">d10</option>
+                <option value="d12">d12</option>
+                <option value="d20">d20</option>
+                <option value="d100">d100</option>
+            </select>
+            <input type="number" id="diceCount" value="1" min="1" max="10" title="Number of dice">
+            <input type="number" id="diceModifier" value="0" placeholder="Mod" title="Modifier">
+        </div>
+        
+        <!-- Combat Controls -->
+        <div class="toolbar-section">
+            <button id="startCombatBtn" onclick="battleMap.startCombat()" class="success">
+                ⚔️ Start Combat
+            </button>
+            <button id="endCombatBtn" onclick="battleMap.endCombat()" class="danger hidden">
+                End Combat
+            </button>
+            <button id="prevTurnBtn" onclick="battleMap.previousTurn()" class="hidden">
+                ⬅ Prev
+            </button>
+            <button id="nextTurnBtn" onclick="battleMap.nextTurn()" class="hidden">
+                Next ➡
+            </button>
+            <button onclick="battleMap.rollInitiativeForAll()">
+                Roll All Initiative
+            </button>
+        </div>
+        
+        <!-- View Controls -->
+        <div class="toolbar-section">
+            <button onclick="battleMap.toggleGrid()" title="Toggle grid visibility">
+                Toggle Grid
+            </button>
+            <button onclick="battleMap.startMeasure()" title="Measure distance">
+                📏 Measure
+            </button>
+            <button onclick="battleMap.uploadBackground()" title="Set background image">
+                Set Background
+            </button>
+            <button onclick="battleMap.clearBackground()" title="Clear background image">
+                Clear Background
+            </button>
+        </div>
     </div>
     
-    <!-- Token Management -->
-    <div class="toolbar-section">
-        <button onclick="battleMap.addToken()">Add Token</button>
-        <button onclick="battleMap.clearSelection()">Clear Selection</button>
+    <canvas id="battleCanvas" width="1200" height="800"></canvas>
+    
+    <!-- ADD THIS: Helper tooltip for first-time users -->
+    <div id="battleMapHelper" class="helper-tooltip hidden">
+        <button class="close-btn" onclick="document.getElementById('battleMapHelper').classList.add('hidden')">×</button>
+        <strong>💡 Battlemap Tips:</strong>
+        <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+            <li>Click "Add Token" to create characters</li>
+            <li>Drag tokens to move them</li>
+            <li><strong>Right-click tokens</strong> to edit, adjust HP, or delete</li>
+            <li>Start combat to track initiative order</li>
+        </ul>
     </div>
     
-    <!-- Combat Controls -->
-    <div class="toolbar-section">
-        <button id="startCombatBtn" onclick="battleMap.startCombat()" class="success">Start Combat</button>
-        <button id="endCombatBtn" onclick="battleMap.endCombat()" class="danger hidden">End Combat</button>
-        <button id="prevTurnBtn" onclick="battleMap.previousTurn()" class="hidden">⬅ Prev</button>
-        <button id="nextTurnBtn" onclick="battleMap.nextTurn()" class="hidden">Next ➡</button>
-        <button onclick="battleMap.rollInitiativeForAll()">Roll All Initiative</button>
-    </div>
-    
-    <!-- View Controls -->
-    <div class="toolbar-section">
-        <button onclick="battleMap.toggleGrid()">Toggle Grid</button>
-        <button onclick="battleMap.startMeasure()">📏 Measure</button>
-        <button onclick="battleMap.uploadBackground()">Set Background</button>
-        <button onclick="battleMap.clearBackground()">Clear Background</button>
-    </div>
-</div>
-            <canvas id="battleCanvas" width="1200" height="800"></canvas>
-            <div id="battleSidebar" class="battle-sidebar">
-                <div id="initiativeTracker" class="initiative-tracker">
-                    <h3>Initiative Order</h3>
-                    <ul id="initiativeList"></ul>
-                </div>
-                <div id="tokenStats" class="token-stats">
-                    <h3>Selected Token</h3>
-                    <div id="selectedTokenInfo">No token selected</div>
-                </div>
+    <div id="battleSidebar" class="battle-sidebar">
+        <div id="initiativeTracker" class="initiative-tracker">
+            <h3>Initiative Order</h3>
+            <ul id="initiativeList"></ul>
+        </div>
+        <div id="tokenStats" class="token-stats">
+            <h3>Selected Token</h3>
+            <div id="selectedTokenInfo">
+                <em>No token selected</em>
+                <p style="font-size: 0.85rem; margin-top: 0.5rem; color: #666;">
+                    💡 Right-click any token for options
+                </p>
             </div>
         </div>
+    </div>
+</div>
 
         <!-- Mapping Mode -->
         <div id="mappingMode" class="mode-container hidden">

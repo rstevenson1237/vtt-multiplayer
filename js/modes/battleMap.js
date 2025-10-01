@@ -62,11 +62,76 @@ export class BattleMapMode {
         this.canvas.addEventListener('contextmenu', (e) => this.onRightClick(e));
     }
 
-    setupCanvas() {
-        this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
-        this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
-        this.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
+// ADD THIS METHOD - Token Creation (around line 130, after initialize())
+async addToken() {
+    const name = prompt('Enter token name:');
+    if (!name) return;
+
+    // Calculate center of canvas for initial placement
+    const centerX = this.canvas.width / 2;
+    const centerY = this.canvas.height / 2;
+    
+    // Snap to grid center
+    let x, y;
+    if (this.showGrid) {
+        x = Math.round(centerX / this.gridSize) * this.gridSize + this.gridSize / 2;
+        y = Math.round(centerY / this.gridSize) * this.gridSize + this.gridSize / 2;
+    } else {
+        x = centerX;
+        y = centerY;
     }
+
+    const tokenId = Date.now().toString();
+    const newToken = {
+        id: tokenId,
+        name: name,
+        x: x,
+        y: y,
+        size: 25, // Medium by default
+        color: '#3498db',
+        hp: 10,
+        maxHp: 10,
+        ac: 10,
+        initiative: 0,
+        initiativeBonus: 0,
+        owner: this.currentUser.uid,
+        ownerName: this.currentUser.displayName || 'Player',
+        conditions: [],
+        notes: ''
+    };
+
+    await this.sync.updateField(`battleMap/tokens/${tokenId}`, newToken);
+    
+    // Auto-select the new token
+    this.selectedToken = tokenId;
+    this.updateSelectedTokenInfo();
+    this.draw();
+    
+    this.eventBus.emit('chat:message', {
+        content: `${this.currentUser.displayName} added token: ${name}`,
+        type: 'system'
+    });
+}
+
+setupCanvas() {
+    this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+    this.canvas.addEventListener('mousemove', (e) => {
+        // NEW: Track mouse position for hover detection
+        const rect = this.canvas.getBoundingClientRect();
+        this.lastMouseX = e.clientX - rect.left;
+        this.lastMouseY = e.clientY - rect.top;
+        
+        this.onMouseMove(e);
+    });
+    this.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
+    
+    // NEW: Add mouseleave to reset cursor
+    this.canvas.addEventListener('mouseleave', () => {
+        this.lastMouseX = undefined;
+        this.lastMouseY = undefined;
+        this.canvas.style.cursor = 'default';
+    });
+}
 
     draw() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -199,12 +264,85 @@ export class BattleMapMode {
                 }
             }
         });
+        
+        // NEW: Add mouse cursor handling for hover feedback
+        this.canvas.style.cursor = 'default';
+        
+        // Check if mouse is over any token
+        const rect = this.canvas.getBoundingClientRect();
+        if (this.lastMouseX !== undefined && this.lastMouseY !== undefined) {
+            const x = this.lastMouseX;
+            const y = this.lastMouseY;
+            
+            Object.entries(this.tokens).forEach(([id, token]) => {
+                const dist = Math.sqrt((x - token.x) ** 2 + (y - token.y) ** 2);
+                if (dist <= (token.size || 25)) {
+                    this.canvas.style.cursor = 'pointer';
+                }
+            });
+        }
     }
 
     startMeasure() {
         this.measuring = true;
         this.canvas.style.cursor = 'crosshair';
     }
+
+// ADD THIS METHOD - Toggle Grid (around line 180)
+async toggleGrid() {
+    this.showGrid = !this.showGrid;
+    await this.sync.syncData('battleMap/showGrid', this.showGrid);
+    this.draw();
+    
+    // Update button text
+    const btn = document.querySelector('[onclick="battleMap.toggleGrid()"]');
+    if (btn) {
+        btn.textContent = this.showGrid ? 'Hide Grid' : 'Show Grid';
+    }
+}
+
+// ADD THIS METHOD - Clear Selection (around line 195)
+clearSelection() {
+    this.selectedToken = null;
+    this.updateSelectedTokenInfo();
+    this.draw();
+}
+
+// ADD THIS METHOD - Roll Dice (around line 203)
+rollDice() {
+    const diceType = document.getElementById('diceType').value;
+    const diceCount = parseInt(document.getElementById('diceCount').value) || 1;
+    const modifier = parseInt(document.getElementById('diceModifier').value) || 0;
+    
+    const rolls = [];
+    let total = modifier;
+    
+    // Extract the number from dice type (e.g., "d20" -> 20)
+    const sides = parseInt(diceType.substring(1));
+    
+    for (let i = 0; i < diceCount; i++) {
+        const roll = Math.floor(Math.random() * sides) + 1;
+        rolls.push(roll);
+        total += roll;
+    }
+    
+    // Emit to chat
+    this.eventBus.emit('chat:diceRoll', {
+        roller: this.currentUser.displayName || 'Player',
+        type: diceType,
+        count: diceCount,
+        modifier: modifier,
+        rolls: rolls,
+        total: total
+    });
+    
+    // Visual feedback
+    const diceBtn = document.querySelector('[onclick="battleMap.rollDice()"]');
+    if (diceBtn) {
+        diceBtn.classList.add('dice-rolling');
+        setTimeout(() => diceBtn.classList.remove('dice-rolling'), 500);
+    }
+}
 
     calculateDistance(x1, y1, x2, y2) {
         const dx = Math.abs(x2 - x1);
@@ -490,61 +628,70 @@ export class BattleMapMode {
     }
 
     onMouseDown(e) {
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        
-        if (this.measuring) {
-            if (!this.measureStart) {
-                this.measureStart = { x, y };
-            } else {
-                this.measureEnd = { x, y };
-                this.measuring = false;
-                this.canvas.style.cursor = 'default';
-                this.draw();
-                
-                // Show distance
-                const dist = this.calculateDistance(
-                    this.measureStart.x, this.measureStart.y,
-                    this.measureEnd.x, this.measureEnd.y
-                );
-                alert(`Distance: ${Math.round(dist.feet)} feet (${dist.squares.toFixed(1)} squares)`);
-                
-                this.measureStart = null;
-                this.measureEnd = null;
-            }
-            return;
-        }
-        
-        // Find clicked token
-        let clickedToken = null;
-        Object.entries(this.tokens).forEach(([id, token]) => {
-            const dist = Math.sqrt((x - token.x) ** 2 + (y - token.y) ** 2);
-            if (dist <= token.size) {
-                clickedToken = id;
-            }
+    // NEW: Show tooltip on first canvas interaction
+    if (!this.hasShownTooltip && Object.keys(this.tokens).length > 0) {
+        this.hasShownTooltip = true;
+        this.eventBus.emit('chat:message', {
+            content: '💡 Tip: Right-click tokens to edit, adjust HP, add conditions, or delete them!',
+            type: 'system'
         });
-        
-        if (clickedToken) {
-            const token = this.tokens[clickedToken];
-            // Check permission to move
-            if (this.userRole === 'referee' || 
-                token.owner === this.currentUser.uid || 
-                this.userRole === 'player') {
-                this.selectedToken = clickedToken;
-                this.isDrawing = true;
-                this.updateSelectedTokenInfo();
-            } else {
-                this.selectedToken = clickedToken;
-                this.updateSelectedTokenInfo();
-            }
+    }
+    
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    if (this.measuring) {
+        if (!this.measureStart) {
+            this.measureStart = { x, y };
         } else {
-            this.selectedToken = null;
+            this.measureEnd = { x, y };
+            this.measuring = false;
+            this.canvas.style.cursor = 'default';
+            this.draw();
+            
+            // Show distance
+            const dist = this.calculateDistance(
+                this.measureStart.x, this.measureStart.y,
+                this.measureEnd.x, this.measureEnd.y
+            );
+            alert(`Distance: ${Math.round(dist.feet)} feet (${dist.squares.toFixed(1)} squares)`);
+            
+            this.measureStart = null;
+            this.measureEnd = null;
+        }
+        return;
+    }
+    
+    // Find clicked token
+    let clickedToken = null;
+    Object.entries(this.tokens).forEach(([id, token]) => {
+        const dist = Math.sqrt((x - token.x) ** 2 + (y - token.y) ** 2);
+        if (dist <= token.size) {
+            clickedToken = id;
+        }
+    });
+    
+    if (clickedToken) {
+        const token = this.tokens[clickedToken];
+        // Check permission to move
+        if (this.userRole === 'referee' || 
+            token.owner === this.currentUser.uid || 
+            this.userRole === 'player') {
+            this.selectedToken = clickedToken;
+            this.isDrawing = true;
+            this.updateSelectedTokenInfo();
+        } else {
+            this.selectedToken = clickedToken;
             this.updateSelectedTokenInfo();
         }
-        
-        this.draw();
+    } else {
+        this.selectedToken = null;
+        this.updateSelectedTokenInfo();
     }
+    
+    this.draw();
+}
 
     onMouseMove(e) {
         const rect = this.canvas.getBoundingClientRect();
@@ -559,10 +706,10 @@ export class BattleMapMode {
         
         if (!this.isDrawing || !this.selectedToken) return;
         
-        // Snap to grid
+        // UPDATED: Snap to grid CENTER instead of corner
         if (this.showGrid) {
-            x = Math.round(x / this.gridSize) * this.gridSize;
-            y = Math.round(y / this.gridSize) * this.gridSize;
+            x = Math.round(x / this.gridSize) * this.gridSize + this.gridSize / 2;
+            y = Math.round(y / this.gridSize) * this.gridSize + this.gridSize / 2;
         }
         
         // Update local display immediately for smooth movement
