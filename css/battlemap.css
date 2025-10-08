@@ -288,3 +288,66 @@ canvas.has-tokens:hover {
     color: white;
     font-weight: bold;
 }
+
+/* Background Settings Dialog */
+.background-settings-dialog {
+    max-width: 500px;
+    padding: 2rem;
+}
+
+.background-settings-dialog label {
+    display: block;
+    margin-bottom: 1.5rem;
+}
+
+.background-settings-dialog select,
+.background-settings-dialog input[type="range"] {
+    width: 100%;
+    margin-top: 0.5rem;
+}
+
+.background-settings-dialog input[type="range"] {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--border-color);
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.background-settings-dialog input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--secondary-color);
+    cursor: pointer;
+}
+
+.background-settings-dialog input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--secondary-color);
+    cursor: pointer;
+    border: none;
+}
+
+.background-settings-dialog span {
+    float: right;
+    font-weight: bold;
+    color: var(--secondary-color);
+}
+
+/* Background loading indicator */
+.bg-loading-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    z-index: 1000;
+}

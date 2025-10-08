@@ -146,17 +146,26 @@
         
         <!-- View Controls -->
         <div class="toolbar-section">
+            <button onclick="battleMap.uploadBackground()" title="Upload local image file">
+                📁 Upload Image
+            </button>
+            <button onclick="battleMap.uploadBackgroundFromURL()" title="Load from URL">
+                🔗 Load URL
+            </button>
+            <button onclick="battleMap.showBackgroundSettings()" title="Adjust background fit, scale, position">
+                ⚙️ BG Settings
+            </button>
+            <button onclick="battleMap.clearBackground()" title="Remove background">
+                🗑️ Clear BG
+            </button>
             <button onclick="battleMap.toggleGrid()" title="Toggle grid visibility">
                 Toggle Grid
             </button>
+            <button onclick="battleMap.alignGridToBackground()" title="Adjust grid size">
+                📏 Grid Size
+            </button>
             <button onclick="battleMap.startMeasure()" title="Measure distance">
-                📏 Measure
-            </button>
-            <button onclick="battleMap.uploadBackground()" title="Set background image">
-                Set Background
-            </button>
-            <button onclick="battleMap.clearBackground()" title="Clear background image">
-                Clear Background
+                Measure
             </button>
         </div>
     </div>

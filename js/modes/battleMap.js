@@ -15,6 +15,14 @@ export class BattleMapMode {
         this.userRole = null;
         this.gameId = null;
         this.backgroundImage = null;
+        this.backgroundData = {
+            image: null,
+            fitMode: 'fit', // 'stretch', 'fit', 'fill', 'tile', 'original'
+            offsetX: 0,
+            offsetY: 0,
+            scale: 1,
+            opacity: 1
+        };
         this.measuring = false;
         this.measureStart = null;
         this.measureEnd = null;
@@ -53,8 +61,18 @@ export class BattleMapMode {
 
         // Listen for background
         this.sync.listenToData('battleMap/background', (bg) => {
-            if (bg?.url) {
-                this.loadBackground(bg.url);
+            if (bg) {
+                this.loadBackground(bg);
+            } else {
+                this.loadBackground(null);
+            }
+        });
+
+        // Listen for grid size
+        this.sync.listenToData('battleMap/gridSize', (size) => {
+            if (size) {
+                this.gridSize = size;
+                this.draw();
             }
         });
 
@@ -135,23 +153,78 @@ setupCanvas() {
 
     draw() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        
-        // Draw background image first
-        if (this.backgroundImage) {
-            this.ctx.drawImage(
-                this.backgroundImage, 
-                0, 0, 
-                this.canvas.width, 
-                this.canvas.height
-            );
+
+        // Draw background image with fit modes
+        if (this.backgroundImage && this.backgroundData.image) {
+            this.drawBackground();
         }
-        
+
         if (this.showGrid) {
             this.drawGrid();
         }
-        
+
         this.drawTokens();
         this.drawMeasurement();
+    }
+
+    drawBackground() {
+        const img = this.backgroundImage;
+        const data = this.backgroundData;
+
+        this.ctx.save();
+        this.ctx.globalAlpha = data.opacity;
+
+        const canvasWidth = this.canvas.width;
+        const canvasHeight = this.canvas.height;
+        const imgWidth = img.width;
+        const imgHeight = img.height;
+
+        switch (data.fitMode) {
+            case 'stretch':
+                // Stretch to fill entire canvas
+                this.ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+                break;
+
+            case 'fit':
+                // Fit entire image, maintain aspect ratio, letterbox if needed
+                const fitRatio = Math.min(canvasWidth / imgWidth, canvasHeight / imgHeight);
+                const fitWidth = imgWidth * fitRatio * data.scale;
+                const fitHeight = imgHeight * fitRatio * data.scale;
+                const fitX = (canvasWidth - fitWidth) / 2 + data.offsetX;
+                const fitY = (canvasHeight - fitHeight) / 2 + data.offsetY;
+                this.ctx.drawImage(img, fitX, fitY, fitWidth, fitHeight);
+                break;
+
+            case 'fill':
+                // Fill entire canvas, maintain aspect ratio, crop if needed
+                const fillRatio = Math.max(canvasWidth / imgWidth, canvasHeight / imgHeight);
+                const fillWidth = imgWidth * fillRatio * data.scale;
+                const fillHeight = imgHeight * fillRatio * data.scale;
+                const fillX = (canvasWidth - fillWidth) / 2 + data.offsetX;
+                const fillY = (canvasHeight - fillHeight) / 2 + data.offsetY;
+                this.ctx.drawImage(img, fillX, fillY, fillWidth, fillHeight);
+                break;
+
+            case 'tile':
+                // Tile/repeat the image
+                const tileWidth = imgWidth * data.scale;
+                const tileHeight = imgHeight * data.scale;
+                for (let x = data.offsetX % tileWidth - tileWidth; x < canvasWidth; x += tileWidth) {
+                    for (let y = data.offsetY % tileHeight - tileHeight; y < canvasHeight; y += tileHeight) {
+                        this.ctx.drawImage(img, x, y, tileWidth, tileHeight);
+                    }
+                }
+                break;
+
+            case 'original':
+                // Original size, centered
+                const origX = (canvasWidth - imgWidth * data.scale) / 2 + data.offsetX;
+                const origY = (canvasHeight - imgHeight * data.scale) / 2 + data.offsetY;
+                this.ctx.drawImage(img, origX, origY, imgWidth * data.scale, imgHeight * data.scale);
+                break;
+        }
+
+        this.ctx.restore();
     }
 
     drawGrid() {
@@ -381,20 +454,160 @@ rollDice() {
         this.ctx.fillText(`${Math.round(dist.feet)} ft`, midX, midY - 10);
     }
 
-    async loadBackground(imageUrl) {
+    async loadBackground(backgroundData) {
+        if (!backgroundData || !backgroundData.data) {
+            this.backgroundImage = null;
+            this.backgroundData = {
+                image: null,
+                fitMode: 'fit',
+                offsetX: 0,
+                offsetY: 0,
+                scale: 1,
+                opacity: 1
+            };
+            this.draw();
+            return;
+        }
+
         const img = new Image();
-        img.crossOrigin = 'anonymous';
         img.onload = () => {
             this.backgroundImage = img;
+            this.backgroundData = {
+                image: img,
+                fitMode: backgroundData.fitMode || 'fit',
+                offsetX: backgroundData.offsetX || 0,
+                offsetY: backgroundData.offsetY || 0,
+                scale: backgroundData.scale || 1,
+                opacity: backgroundData.opacity !== undefined ? backgroundData.opacity : 1,
+                name: backgroundData.name
+            };
             this.draw();
         };
-        img.src = imageUrl;
+        img.onerror = (error) => {
+            console.error('Error loading background image:', error);
+            this.backgroundImage = null;
+        };
+        img.src = backgroundData.data;
     }
 
     async uploadBackground() {
+        // Create file input element
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Show loading indicator
+            this.eventBus.emit('chat:message', {
+                content: '⏳ Uploading background image...',
+                type: 'system'
+            });
+
+            try {
+                // Convert to base64 and compress
+                const base64 = await this.compressAndConvertImage(file);
+
+                // Store in Firebase
+                await this.sync.syncData('battleMap/background', {
+                    data: base64,
+                    name: file.name,
+                    fitMode: 'fit',
+                    offsetX: 0,
+                    offsetY: 0,
+                    scale: 1,
+                    opacity: 1,
+                    uploadedBy: this.currentUser.displayName,
+                    uploadedAt: Date.now()
+                });
+
+                this.eventBus.emit('chat:message', {
+                    content: `✅ Background "${file.name}" uploaded successfully!`,
+                    type: 'system'
+                });
+            } catch (error) {
+                console.error('Error uploading background:', error);
+                alert('Failed to upload image. File may be too large.');
+            }
+        };
+
+        input.click();
+    }
+
+    async compressAndConvertImage(file, maxWidth = 2048, maxHeight = 2048, quality = 0.85) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                const img = new Image();
+
+                img.onload = () => {
+                    // Create canvas for compression
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    // Calculate new dimensions while preserving aspect ratio
+                    if (width > maxWidth || height > maxHeight) {
+                        const ratio = Math.min(maxWidth / width, maxHeight / height);
+                        width = width * ratio;
+                        height = height * ratio;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    // Draw and compress
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Convert to base64
+                    const base64 = canvas.toDataURL('image/jpeg', quality);
+
+                    // Check size (Firebase has limits)
+                    const sizeInMB = (base64.length * 3 / 4) / (1024 * 1024);
+                    if (sizeInMB > 10) {
+                        reject(new Error('Image too large. Please use a smaller image or lower quality.'));
+                    } else {
+                        resolve(base64);
+                    }
+                };
+
+                img.onerror = reject;
+                img.src = e.target.result;
+            };
+
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    async uploadBackgroundFromURL() {
         const url = prompt('Enter background image URL:');
-        if (url) {
-            await this.sync.syncData('battleMap/background', { url });
+        if (!url) return;
+
+        try {
+            // Load image to convert to base64
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const base64 = await this.compressAndConvertImage(blob);
+
+            await this.sync.syncData('battleMap/background', {
+                data: base64,
+                name: 'External Image',
+                fitMode: 'fit',
+                offsetX: 0,
+                offsetY: 0,
+                scale: 1,
+                opacity: 1,
+                uploadedBy: this.currentUser.displayName,
+                uploadedAt: Date.now()
+            });
+        } catch (error) {
+            console.error('Error loading URL:', error);
+            alert('Failed to load image from URL. Check CORS/URL validity.');
         }
     }
 
@@ -431,6 +644,126 @@ rollDice() {
             });
         }
     }
+
+    showBackgroundSettings() {
+        if (!this.backgroundImage) {
+            alert('No background image loaded. Upload one first!');
+            return;
+        }
+
+        const dialog = document.createElement('div');
+        dialog.className = 'modal';
+        dialog.innerHTML = `
+            <div class="modal-content background-settings-dialog">
+                <h3>Background Settings</h3>
+
+                <label>
+                    Fit Mode:
+                    <select id="bgFitMode">
+                        <option value="stretch" ${this.backgroundData.fitMode === 'stretch' ? 'selected' : ''}>Stretch (Fill canvas, distort)</option>
+                        <option value="fit" ${this.backgroundData.fitMode === 'fit' ? 'selected' : ''}>Fit (Show all, letterbox)</option>
+                        <option value="fill" ${this.backgroundData.fitMode === 'fill' ? 'selected' : ''}>Fill (Cover canvas, crop)</option>
+                        <option value="tile" ${this.backgroundData.fitMode === 'tile' ? 'selected' : ''}>Tile (Repeat)</option>
+                        <option value="original" ${this.backgroundData.fitMode === 'original' ? 'selected' : ''}>Original Size</option>
+                    </select>
+                </label>
+
+                <label>
+                    Scale: <span id="bgScaleValue">${(this.backgroundData.scale * 100).toFixed(0)}%</span>
+                    <input type="range" id="bgScale" min="10" max="300" value="${this.backgroundData.scale * 100}" step="5">
+                </label>
+
+                <label>
+                    Opacity: <span id="bgOpacityValue">${(this.backgroundData.opacity * 100).toFixed(0)}%</span>
+                    <input type="range" id="bgOpacity" min="0" max="100" value="${this.backgroundData.opacity * 100}" step="5">
+                </label>
+
+                <label>
+                    Horizontal Offset: <span id="bgOffsetXValue">${this.backgroundData.offsetX}px</span>
+                    <input type="range" id="bgOffsetX" min="-500" max="500" value="${this.backgroundData.offsetX}" step="10">
+                </label>
+
+                <label>
+                    Vertical Offset: <span id="bgOffsetYValue">${this.backgroundData.offsetY}px</span>
+                    <input type="range" id="bgOffsetY" min="-500" max="500" value="${this.backgroundData.offsetY}" step="10">
+                </label>
+
+                <div class="dialog-buttons">
+                    <button onclick="this.closest('.modal').remove()">Cancel</button>
+                    <button class="secondary" id="resetBgSettings">Reset</button>
+                    <button class="primary" id="saveBgSettings">Apply</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(dialog);
+
+        // Live preview
+        const updatePreview = () => {
+            this.backgroundData.fitMode = document.getElementById('bgFitMode').value;
+            this.backgroundData.scale = document.getElementById('bgScale').value / 100;
+            this.backgroundData.opacity = document.getElementById('bgOpacity').value / 100;
+            this.backgroundData.offsetX = parseInt(document.getElementById('bgOffsetX').value);
+            this.backgroundData.offsetY = parseInt(document.getElementById('bgOffsetY').value);
+
+            document.getElementById('bgScaleValue').textContent = document.getElementById('bgScale').value + '%';
+            document.getElementById('bgOpacityValue').textContent = document.getElementById('bgOpacity').value + '%';
+            document.getElementById('bgOffsetXValue').textContent = document.getElementById('bgOffsetX').value + 'px';
+            document.getElementById('bgOffsetYValue').textContent = document.getElementById('bgOffsetY').value + 'px';
+
+            this.draw();
+        };
+
+        document.getElementById('bgFitMode').addEventListener('change', updatePreview);
+        document.getElementById('bgScale').addEventListener('input', updatePreview);
+        document.getElementById('bgOpacity').addEventListener('input', updatePreview);
+        document.getElementById('bgOffsetX').addEventListener('input', updatePreview);
+        document.getElementById('bgOffsetY').addEventListener('input', updatePreview);
+
+        document.getElementById('resetBgSettings').onclick = () => {
+            this.backgroundData.fitMode = 'fit';
+            this.backgroundData.scale = 1;
+            this.backgroundData.opacity = 1;
+            this.backgroundData.offsetX = 0;
+            this.backgroundData.offsetY = 0;
+            dialog.remove();
+            this.draw();
+        };
+
+        document.getElementById('saveBgSettings').onclick = async () => {
+            // Get current background data from Firebase
+            const currentBg = await this.sync.db.ref(
+                `games/${this.gameId}/state/battleMap/background`
+            ).once('value').then(s => s.val());
+
+            // Update with new settings
+            await this.sync.syncData('battleMap/background', {
+                ...currentBg,
+                fitMode: this.backgroundData.fitMode,
+                scale: this.backgroundData.scale,
+                opacity: this.backgroundData.opacity,
+                offsetX: this.backgroundData.offsetX,
+                offsetY: this.backgroundData.offsetY
+            });
+
+            dialog.remove();
+        };
+    }
+
+    async alignGridToBackground() {
+        if (!this.backgroundImage) {
+            alert('Load a background image first!');
+            return;
+        }
+
+        const squareSize = prompt('Enter grid square size in pixels:', this.gridSize);
+        if (squareSize && !isNaN(squareSize)) {
+            this.gridSize = parseInt(squareSize);
+            await this.sync.syncData('battleMap/gridSize', this.gridSize);
+            this.draw();
+        }
+    }
+
 
     async editToken(tokenId) {
         const token = this.tokens[tokenId];
