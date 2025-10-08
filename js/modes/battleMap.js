@@ -28,6 +28,19 @@ export class BattleMapMode {
         this.measureEnd = null;
         this.currentTurn = null;
         this.combatActive = false;
+
+        // ADD: Drawing/annotation properties
+        this.annotations = [];
+        this.drawingTool = null;
+        this.isAnnotating = false;
+        this.penPath = [];
+        
+        // ADD: Movement measurement
+        this.showMovementDistance = true;
+        this.movementStartPos = null;
+        
+        // ADD: Fix for right-click movement
+        this.rightClickHandled = false;
     }
 
     initialize(gameId, user, role) {
@@ -153,18 +166,35 @@ setupCanvas() {
 
     draw() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-        // Draw background image with fit modes
-        if (this.backgroundImage && this.backgroundData.image) {
+        
+        if (this.backgroundImage) {
             this.drawBackground();
         }
-
+        
         if (this.showGrid) {
             this.drawGrid();
         }
-
+        
+        this.drawAnnotations(); // ADD THIS
         this.drawTokens();
         this.drawMeasurement();
+        
+        // Draw current pen path
+        if (this.penPath.length > 0) {
+            this.ctx.save();
+            this.ctx.strokeStyle = document.getElementById('drawColor').value;
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.penPath.forEach((point, i) => {
+                if (i === 0) {
+                    this.ctx.moveTo(point.x, point.y);
+                } else {
+                    this.ctx.lineTo(point.x, point.y);
+                }
+            });
+            this.ctx.stroke();
+            this.ctx.restore();
+        }
     }
 
     drawBackground() {
@@ -248,112 +278,29 @@ setupCanvas() {
 
     drawTokens() {
         Object.entries(this.tokens).forEach(([id, token]) => {
-            // Draw token
+            // Calculate token size based on grid
+            const relativeSize = this.getTokenSizeInPixels(token.size || 'medium');
+            
             this.ctx.fillStyle = token.color || '#3498db';
             this.ctx.beginPath();
-            this.ctx.arc(token.x, token.y, token.size || 25, 0, Math.PI * 2);
-            this.ctx.fill();
-            
-            // Draw current turn indicator
-            if (this.currentTurn === id && this.combatActive) {
-                this.ctx.strokeStyle = '#f39c12';
-                this.ctx.lineWidth = 4;
-                this.ctx.setLineDash([5, 5]);
-                this.ctx.stroke();
-                this.ctx.setLineDash([]);
-            }
-            
-            // Draw selection highlight
-            if (this.selectedToken === id) {
-                this.ctx.strokeStyle = '#e74c3c';
-                this.ctx.lineWidth = 3;
-                this.ctx.stroke();
-            }
-            
-            // Draw label
-            this.ctx.fillStyle = '#fff';
-            this.ctx.strokeStyle = '#000';
-            this.ctx.lineWidth = 3;
-            this.ctx.font = 'bold 12px Arial';
-            this.ctx.textAlign = 'center';
-            this.ctx.strokeText(token.name, token.x, token.y + (token.size || 25) + 15);
-            this.ctx.fillText(token.name, token.x, token.y + (token.size || 25) + 15);
-            
-            // Draw HP bar
-            if (token.hp !== undefined && token.maxHp) {
-                const barWidth = (token.size || 25) * 2;
-                const barHeight = 6;
-                const hpPercent = Math.max(0, token.hp / token.maxHp);
-                const barY = token.y - (token.size || 25) - 10;
-                
-                // Background
-                this.ctx.fillStyle = '#000';
-                this.ctx.fillRect(token.x - barWidth/2, barY, barWidth, barHeight);
-                
-                // HP bar
-                let barColor = '#27ae60';
-                if (hpPercent < 0.3) barColor = '#e74c3c';
-                else if (hpPercent < 0.6) barColor = '#f39c12';
-                
-                this.ctx.fillStyle = barColor;
-                this.ctx.fillRect(token.x - barWidth/2, barY, barWidth * hpPercent, barHeight);
-                
-                // HP text
-                this.ctx.fillStyle = '#fff';
-                this.ctx.strokeStyle = '#000';
-                this.ctx.font = 'bold 10px Arial';
-                this.ctx.lineWidth = 2;
-                const hpText = `${token.hp}/${token.maxHp}`;
-                this.ctx.strokeText(hpText, token.x, barY + 4);
-                this.ctx.fillText(hpText, token.x, barY + 4);
-            }
-            
-            // Draw AC badge
-            if (token.ac) {
-                const acSize = 16;
-                const acX = token.x + (token.size || 25);
-                const acY = token.y - (token.size || 25);
-                
-                this.ctx.fillStyle = '#2c3e50';
-                this.ctx.beginPath();
-                this.ctx.arc(acX, acY, acSize/2, 0, Math.PI * 2);
-                this.ctx.fill();
-                
-                this.ctx.fillStyle = '#fff';
-                this.ctx.font = 'bold 10px Arial';
-                this.ctx.fillText(token.ac, acX, acY + 3);
-            }
-            
-            // Draw conditions
-            if (token.conditions && token.conditions.length > 0) {
-                const condY = token.y + (token.size || 25) + 25;
-                this.ctx.font = '10px Arial';
-                this.ctx.fillStyle = '#9b59b6';
-                const condText = token.conditions.slice(0, 2).join(', ');
-                this.ctx.fillText(condText, token.x, condY);
-                
-                if (token.conditions.length > 2) {
-                    this.ctx.fillText(`+${token.conditions.length - 2} more`, token.x, condY + 12);
-                }
-            }
+            this.ctx.arc(token.x, token.y, relativeSize, 0, Math.PI * 2);
+            // ... rest of drawing code
         });
+    }
+
+    getTokenSizeInPixels(size) {
+        // Map token sizes to grid squares
+        const sizeMap = {
+            'tiny': 0.25,
+            'small': 0.4,
+            'medium': 0.5,
+            'large': 0.75,
+            'huge': 1,
+            'gargantuan': 1.5
+        };
         
-        // NEW: Add mouse cursor handling for hover feedback
-        this.canvas.style.cursor = 'default';
-        
-        // Check if mouse is over any token
-        const rect = this.canvas.getBoundingClientRect();
-        if (this.lastMouseX !== undefined && this.lastMouseY !== undefined) {
-            const x = this.lastMouseX;
-            const y = this.lastMouseY;
-            
-            Object.entries(this.tokens).forEach(([id, token]) => {
-                const dist = Math.sqrt((x - token.x) ** 2 + (y - token.y) ** 2);
-                if (dist <= (token.size || 25)) {
-                    this.canvas.style.cursor = 'pointer';
-                }
-            });
-        }
+        const gridMultiplier = sizeMap[size] || sizeMap['medium'];
+        return this.gridSize * gridMultiplier;
     }
 
     startMeasure() {
@@ -961,94 +908,149 @@ rollDice() {
     }
 
     onMouseDown(e) {
-    // NEW: Show tooltip on first canvas interaction
-    if (!this.hasShownTooltip && Object.keys(this.tokens).length > 0) {
-        this.hasShownTooltip = true;
-        this.eventBus.emit('chat:message', {
-            content: '💡 Tip: Right-click tokens to edit, adjust HP, add conditions, or delete them!',
-            type: 'system'
-        });
-    }
-    
-    const rect = this.canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    if (this.measuring) {
-        if (!this.measureStart) {
-            this.measureStart = { x, y };
-        } else {
-            this.measureEnd = { x, y };
-            this.measuring = false;
-            this.canvas.style.cursor = 'default';
-            this.draw();
-            
-            // Show distance
-            const dist = this.calculateDistance(
-                this.measureStart.x, this.measureStart.y,
-                this.measureEnd.x, this.measureEnd.y
-            );
-            alert(`Distance: ${Math.round(dist.feet)} feet (${dist.squares.toFixed(1)} squares)`);
-            
-            this.measureStart = null;
-            this.measureEnd = null;
-        }
-        return;
-    }
-    
-    // Find clicked token
-    let clickedToken = null;
-    Object.entries(this.tokens).forEach(([id, token]) => {
-        const dist = Math.sqrt((x - token.x) ** 2 + (y - token.y) ** 2);
-        if (dist <= token.size) {
-            clickedToken = id;
-        }
-    });
-    
-    if (clickedToken) {
-        const token = this.tokens[clickedToken];
-        // Check permission to move
-        if (this.userRole === 'referee' || 
-            token.owner === this.currentUser.uid || 
-            this.userRole === 'player') {
-            this.selectedToken = clickedToken;
-            this.isDrawing = true;
-            this.updateSelectedTokenInfo();
-        } else {
-            this.selectedToken = clickedToken;
-            this.updateSelectedTokenInfo();
-        }
-    } else {
-        this.selectedToken = null;
-        this.updateSelectedTokenInfo();
-    }
-    
-    this.draw();
-}
-
-    onMouseMove(e) {
-        const rect = this.canvas.getBoundingClientRect();
-        let x = e.clientX - rect.left;
-        let y = e.clientY - rect.top;
-        
-        if (this.measuring && this.measureStart) {
-            this.measureEnd = { x, y };
-            this.draw();
+        // Ignore right-click for movement
+        if (e.button === 2) {
+            this.rightClickHandled = true;
             return;
         }
         
-        if (!this.isDrawing || !this.selectedToken) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
         
-        // UPDATED: Snap to grid CENTER instead of corner
-        if (this.showGrid) {
-            x = Math.round(x / this.gridSize) * this.gridSize + this.gridSize / 2;
-            y = Math.round(y / this.gridSize) * this.gridSize + this.gridSize / 2;
+        // Handle drawing tools
+        if (this.drawingTool === 'pen') {
+            this.startPenDrawing(x, y);
+            return;
+        } else if (this.drawingTool === 'text') {
+            this.addTextAnnotation(x, y);
+            return;
         }
         
-        // Update local display immediately for smooth movement
-        this.tokens[this.selectedToken].x = x;
-        this.tokens[this.selectedToken].y = y;
-        this.draw();
+        // ... existing token selection code ...
+        
+        // ADDITION: Store start position for movement measurement
+        if (clickedToken) {
+            this.movementStartPos = { 
+                x: this.tokens[clickedToken].x, 
+                y: this.tokens[clickedToken].y 
+            };
+        }
+    }
+
+    onMouseMove(e) {
+        // ... existing code ...
+        
+        if (this.isDrawing && this.selectedToken && this.movementStartPos) {
+            // Draw movement measurement
+            this.drawMovementPath(
+                this.movementStartPos.x, 
+                this.movementStartPos.y,
+                x, y
+            );
+        }
+        
+        // Handle pen drawing
+        if (this.isAnnotating && this.drawingTool === 'pen') {
+            this.penPath.push({ x, y });
+            this.draw();
+        }
+    }
+
+    drawMovementPath(startX, startY, endX, endY) {
+        // Draw line and distance during token movement
+        this.ctx.save();
+        this.ctx.strokeStyle = 'rgba(52, 152, 219, 0.5)';
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([5, 5]);
+        
+        this.ctx.beginPath();
+        this.ctx.moveTo(startX, startY);
+        this.ctx.lineTo(endX, endY);
+        this.ctx.stroke();
+        
+        // Calculate and display distance
+        const dist = this.calculateDistance(startX, startY, endX, endY);
+        const midX = (startX + endX) / 2;
+        const midY = (startY + endY) / 2;
+        
+        // Draw distance label
+        this.ctx.fillStyle = 'white';
+        this.ctx.strokeStyle = 'black';
+        this.ctx.lineWidth = 3;
+        this.ctx.font = 'bold 14px Arial';
+        this.ctx.textAlign = 'center';
+        
+        const distText = `${Math.round(dist.feet)} ft`;
+        this.ctx.strokeText(distText, midX, midY - 10);
+        this.ctx.fillText(distText, midX, midY - 10);
+        
+        this.ctx.restore();
+    }
+
+    // ADD: Pen tool implementation
+    startPenDrawing(x, y) {
+        this.isAnnotating = true;
+        this.penPath = [{ x, y }];
+    }
+
+    finishPenDrawing() {
+        if (this.penPath.length > 1) {
+            const annotation = {
+                type: 'pen',
+                path: [...this.penPath],
+                color: document.getElementById('drawColor').value,
+                id: Date.now().toString()
+            };
+            this.annotations.push(annotation);
+            this.syncAnnotations();
+        }
+        this.penPath = [];
+        this.isAnnotating = false;
+    }
+
+    // ADD: Text tool implementation
+    addTextAnnotation(x, y) {
+        const text = prompt('Enter text:');
+        if (text) {
+            const annotation = {
+                type: 'text',
+                x, y,
+                text,
+                color: document.getElementById('drawColor').value,
+                id: Date.now().toString()
+            };
+            this.annotations.push(annotation);
+            this.syncAnnotations();
+        }
+    }
+
+    // ADD: Draw annotations
+    drawAnnotations() {
+        this.annotations.forEach(ann => {
+            this.ctx.save();
+            
+            if (ann.type === 'pen') {
+                this.ctx.strokeStyle = ann.color;
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                ann.path.forEach((point, i) => {
+                    if (i === 0) {
+                        this.ctx.moveTo(point.x, point.y);
+                    } else {
+                        this.ctx.lineTo(point.x, point.y);
+                    }
+                });
+                this.ctx.stroke();
+                
+            } else if (ann.type === 'text') {
+                this.ctx.fillStyle = ann.color;
+                this.ctx.font = '16px Arial';
+                this.ctx.fillText(ann.text, ann.x, ann.y);
+            }
+            
+            this.ctx.restore();
+        });
     }
 
     async onMouseUp(e) {
@@ -1117,5 +1119,12 @@ rollDice() {
 
     cleanup() {
         // Cleanup is handled by RealtimeSync
+    }
+
+    // ADD: Settings modal management
+    openSettings() {
+        document.getElementById('battleMapSettings').classList.remove('hidden');
+        // Load current settings into modal
+        this.loadSettingsToModal();
     }
 }

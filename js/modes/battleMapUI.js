@@ -96,42 +96,55 @@ static showTokenContextMenu(x, y, token, callbacks) {
         };
     }
 
-    static showHPAdjustDialog(token, onAdjust) {
-        const dialog = document.createElement('div');
-        dialog.className = 'modal';
-        dialog.innerHTML = `
-            <div class="modal-content hp-adjust-dialog">
-                <h3>Adjust HP: ${token.name}</h3>
-                <div class="hp-display">Current: ${token.hp} / ${token.maxHp}</div>
-                <div class="hp-buttons">
-                    <button onclick="this.adjustHP(-10)">-10</button>
-                    <button onclick="this.adjustHP(-5)">-5</button>
-                    <button onclick="this.adjustHP(-1)">-1</button>
-                    <input type="number" id="hpAdjustAmount" value="0" placeholder="Custom">
-                    <button onclick="this.adjustHP(1)">+1</button>
-                    <button onclick="this.adjustHP(5)">+5</button>
-                    <button onclick="this.adjustHP(10)">+10</button>
-                </div>
-                <div class="dialog-buttons">
-                    <button onclick="this.closest('.modal').remove()">Cancel</button>
-                    <button class="primary" id="applyHPAdjust">Apply Custom</button>
-                </div>
+static showHPAdjustDialog(token, onAdjust) {
+    const dialog = document.createElement('div');
+    dialog.className = 'modal';
+    
+    // FIX: Make adjustment buttons work properly
+    let currentHP = token.hp;
+    
+    dialog.innerHTML = `
+        <div class="modal-content hp-adjust-dialog">
+            <h3>Adjust HP: ${token.name}</h3>
+            <div class="hp-display" id="hpPreview">
+                Current: <span id="currentHPDisplay">${currentHP}</span> / ${token.maxHp}
             </div>
-        `;
+            <div class="hp-buttons">
+                <button class="hp-adjust-btn" data-adjust="-10">-10</button>
+                <button class="hp-adjust-btn" data-adjust="-5">-5</button>
+                <button class="hp-adjust-btn" data-adjust="-1">-1</button>
+                <input type="number" id="hpAdjustAmount" value="0" placeholder="Custom">
+                <button class="hp-adjust-btn" data-adjust="1">+1</button>
+                <button class="hp-adjust-btn" data-adjust="5">+5</button>
+                <button class="hp-adjust-btn" data-adjust="10">+10</button>
+            </div>
+            <div class="dialog-buttons">
+                <button onclick="this.closest('.modal').remove()">Cancel</button>
+                <button class="primary" id="applyHPAdjust">Apply</button>
+            </div>
+        </div>
+    `;
 
-        document.body.appendChild(dialog);
-
-        dialog.adjustHP = (amount) => {
-            const newHP = Math.max(0, Math.min(token.maxHp, token.hp + amount));
-            onAdjust(newHP);
-            dialog.remove();
-        };
-
-        document.getElementById('applyHPAdjust').onclick = () => {
-            const amount = parseInt(document.getElementById('hpAdjustAmount').value) || 0;
-            dialog.adjustHP(amount);
-        };
-    }
+    document.body.appendChild(dialog);
+    
+    // FIX: Add event listeners properly
+    dialog.querySelectorAll('.hp-adjust-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const adjust = parseInt(e.target.dataset.adjust);
+            currentHP = Math.max(0, Math.min(token.maxHp, currentHP + adjust));
+            document.getElementById('currentHPDisplay').textContent = currentHP;
+        });
+    });
+    
+    document.getElementById('applyHPAdjust').onclick = () => {
+        const customAdjust = parseInt(document.getElementById('hpAdjustAmount').value) || 0;
+        if (customAdjust !== 0) {
+            currentHP = Math.max(0, Math.min(token.maxHp, token.hp + customAdjust));
+        }
+        onAdjust(currentHP);
+        dialog.remove();
+    };
+}
 
     static showConditionDialog(token, currentConditions, onUpdate) {
         const conditions = [

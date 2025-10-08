@@ -67,4 +67,19 @@ export class RealtimeSync {
         this.listeners = [];
         this.gameId = null;
     }
+
+    // Add to the class methods
+async syncAnnotations(annotations) {
+    if (!this.gameId) return Promise.reject('No game ID set');
+    return this.db.ref(`games/${this.gameId}/state/battleMap/annotations`).set(annotations);
+}
+
+listenToAnnotations(callback) {
+    if (!this.gameId) return;
+    const ref = this.db.ref(`games/${this.gameId}/state/battleMap/annotations`);
+    const listener = ref.on('value', (snapshot) => {
+        callback(snapshot.val() || []);
+    });
+    this.listeners.push({ ref, listener });
+}
 }
