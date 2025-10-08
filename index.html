@@ -96,82 +96,149 @@
     <main id="appContent" class="hidden">
         <!-- Battle Map Mode -->
         <div id="battlemapMode" class="mode-container hidden">
-<div class="toolbar">
-    <!-- Core Token/Combat Controls -->
-    <div class="toolbar-section">
-        <button onclick="battleMap.addToken()" class="success">➕ Token</button>
-        <button onclick="battleMap.rollDice()">🎲 Roll</button>
-        <select id="diceType"><!-- dice options --></select>
-        <!-- ... dice controls ... -->
-    </div>
-    
-    <!-- Drawing Tools (NEW) -->
-    <div class="toolbar-section">
-        <button data-draw-tool="pen" onclick="battleMap.selectDrawTool('pen')">✏️ Pen</button>
-        <button data-draw-tool="text" onclick="battleMap.selectDrawTool('text')">📝 Text</button>
-        <button data-draw-tool="eraser" onclick="battleMap.selectDrawTool('eraser')">🧹 Erase</button>
-        <input type="color" id="drawColor" value="#ff0000">
-        <button onclick="battleMap.clearAnnotations()">Clear</button>
-    </div>
-    
-    <!-- Settings Button (NEW) -->
-    <div class="toolbar-section">
-        <button onclick="battleMap.openSettings()" class="settings-btn">⚙️ Settings</button>
-        <button onclick="battleMap.startMeasure()">📏 Measure</button>
-    </div>
-</div>
+            <div class="toolbar">
+                <!-- Core Token/Combat Controls -->
+                <div class="toolbar-section">
+                    <button onclick="battleMap.addToken()" class="success">➕ Token</button>
+                    <button onclick="battleMap.rollDice()">🎲 Roll</button>
+                    <select id="diceType">
+                        <option value="d4">d4</option>
+                        <option value="d6">d6</option>
+                        <option value="d8">d8</option>
+                        <option value="d10">d10</option>
+                        <option value="d12">d12</option>
+                        <option value="d20" selected>d20</option>
+                        <option value="d100">d100</option>
+                    </select>
+                    <input type="number" id="diceCount" value="1" min="1" max="20" style="width: 50px;">
+                    <input type="number" id="diceModifier" value="0" placeholder="+mod" style="width: 60px;">
+                </div>
+                
+                <!-- Combat Controls -->
+                <div class="toolbar-section">
+                    <button onclick="battleMap.toggleGrid()">Toggle Grid</button>
+                    <button onclick="battleMap.rollInitiativeForAll()">Roll All Init</button>
+                    <button id="startCombatBtn" onclick="battleMap.startCombat()">Start Combat</button>
+                    <button id="endCombatBtn" onclick="battleMap.endCombat()" class="hidden danger">End Combat</button>
+                    <button id="nextTurnBtn" onclick="battleMap.nextTurn()" class="hidden">Next Turn</button>
+                    <button id="prevTurnBtn" onclick="battleMap.previousTurn()" class="hidden">Prev Turn</button>
+                </div>
+                
+                <!-- Drawing Tools -->
+                <div class="toolbar-section">
+                    <button data-draw-tool="pen" onclick="battleMap.selectDrawTool('pen')">✏️ Pen</button>
+                    <button data-draw-tool="text" onclick="battleMap.selectDrawTool('text')">📝 Text</button>
+                    <button data-draw-tool="eraser" onclick="battleMap.selectDrawTool('eraser')">🧹 Erase</button>
+                    <input type="color" id="drawColor" value="#ff0000">
+                    <button onclick="battleMap.clearAnnotations()">Clear Annotations</button>
+                </div>
+                
+                <!-- Background & Settings -->
+                <div class="toolbar-section">
+                    <button onclick="battleMap.showBattleMapSettings()">⚙️ Settings</button>
+                    <button onclick="battleMap.startMeasure()">📏 Measure</button>
+                </div>
+            </div>
+            
+            <canvas id="battleCanvas" width="1200" height="800"></canvas>
+            
+            <!-- Helper tooltip for first-time users -->
+            <div id="battleMapHelper" class="helper-tooltip hidden">
+                <button class="close-btn" onclick="document.getElementById('battleMapHelper').classList.add('hidden')">×</button>
+                <strong>💡 Battlemap Tips:</strong>
+                <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+                    <li>Click "Add Token" to create characters</li>
+                    <li>Drag tokens to move them</li>
+                    <li><strong>Right-click tokens</strong> to edit, adjust HP, or delete</li>
+                    <li>Start combat to track initiative order</li>
+                </ul>
+            </div>
+            
+            <div id="battleSidebar" class="battle-sidebar">
+                <div id="initiativeTracker" class="initiative-tracker">
+                    <h3>Initiative Order</h3>
+                    <ul id="initiativeList"></ul>
+                </div>
+                <div id="tokenStats" class="token-stats">
+                    <h3>Selected Token</h3>
+                    <div id="selectedTokenInfo">
+                        <em>No token selected</em>
+                        <p style="font-size: 0.85rem; margin-top: 0.5rem; color: #666;">
+                            💡 Right-click any token for options
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
 
 <!-- Add Settings Modal -->
 <div id="battleMapSettings" class="settings-modal hidden">
     <div class="settings-content">
+        <button class="close-btn" onclick="document.getElementById('battleMapSettings').classList.add('hidden')" style="position: absolute; top: 10px; right: 10px; font-size: 1.5rem; background: none; border: none; cursor: pointer;">×</button>
         <div class="settings-tabs">
             <button class="tab-btn active" data-tab="background">Background</button>
             <button class="tab-btn" data-tab="grid">Grid</button>
             <button class="tab-btn" data-tab="display">Display</button>
         </div>
-        
+
         <div class="tab-content" id="backgroundTab">
-            <!-- All background controls moved here -->
-        </div>
-        <div class="tab-content hidden" id="gridTab">
-            <!-- Grid settings -->
-        </div>
-        <div class="tab-content hidden" id="displayTab">
-            <!-- Display preferences -->
-        </div>
-    </div>
-</div>
-    
-    <canvas id="battleCanvas" width="1200" height="800"></canvas>
-    
-    <!-- ADD THIS: Helper tooltip for first-time users -->
-    <div id="battleMapHelper" class="helper-tooltip hidden">
-        <button class="close-btn" onclick="document.getElementById('battleMapHelper').classList.add('hidden')">×</button>
-        <strong>💡 Battlemap Tips:</strong>
-        <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
-            <li>Click "Add Token" to create characters</li>
-            <li>Drag tokens to move them</li>
-            <li><strong>Right-click tokens</strong> to edit, adjust HP, or delete</li>
-            <li>Start combat to track initiative order</li>
-        </ul>
-    </div>
-    
-    <div id="battleSidebar" class="battle-sidebar">
-        <div id="initiativeTracker" class="initiative-tracker">
-            <h3>Initiative Order</h3>
-            <ul id="initiativeList"></ul>
-        </div>
-        <div id="tokenStats" class="token-stats">
-            <h3>Selected Token</h3>
-            <div id="selectedTokenInfo">
-                <em>No token selected</em>
-                <p style="font-size: 0.85rem; margin-top: 0.5rem; color: #666;">
-                    💡 Right-click any token for options
-                </p>
+            <h4>Background</h4>
+            <div class="dialog-buttons">
+                <button onclick="battleMap.uploadBackground()">📁 Upload</button>
+                <button onclick="battleMap.clearBackground()" class="danger">Clear</button>
+            </div>
+            <hr style="margin: 1rem 0;">
+            <h4>Background Properties</h4>
+            <label>
+                Fit Mode:
+                <select id="bgFitMode">
+                    <option value="stretch">Stretch</option>
+                    <option value="fit">Fit</option>
+                    <option value="fill">Fill</option>
+                    <option value="tile">Tile</option>
+                    <option value="original">Original</option>
+                </select>
+            </label>
+            <label>
+                Scale: <span id="bgScaleValue">100%</span>
+                <input type="range" id="bgScale" min="10" max="300" value="100" step="5">
+            </label>
+            <label>
+                Opacity: <span id="bgOpacityValue">100%</span>
+                <input type="range" id="bgOpacity" min="0" max="100" value="100" step="5">
+            </label>
+            <label>
+                Horizontal Offset: <span id="bgOffsetXValue">0px</span>
+                <input type="range" id="bgOffsetX" min="-500" max="500" value="0" step="10">
+            </label>
+            <label>
+                Vertical Offset: <span id="bgOffsetYValue">0px</span>
+                <input type="range" id="bgOffsetY" min="-500" max="500" value="0" step="10">
+            </label>
+            <div class="dialog-buttons">
+                <button class="secondary" id="resetBgSettings">Reset</button>
+                <button class="primary" id="saveBgSettings">Apply</button>
             </div>
         </div>
+        
+        <div class="tab-content hidden" id="gridTab">
+            <h4>Grid Settings</h4>
+            <label>
+                Grid Size: <span id="gridSizeValue">50px</span>
+                <input type="range" id="gridSizeSlider" min="10" max="100" value="50" step="2">
+            </label>
+            <label>
+                <input type="checkbox" id="showGridCheckbox" checked>
+                Show Grid
+            </label>
+        </div>
+        <div class="tab-content hidden" id="displayTab">
+            <h4>Display Settings</h4>
+            <p>Future display settings will go here.</p>
+        </div>
     </div>
 </div>
+
 
         <!-- Mapping Mode -->
         <div id="mappingMode" class="mode-container hidden">

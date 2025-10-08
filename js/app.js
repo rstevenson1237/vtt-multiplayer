@@ -224,6 +224,9 @@ switchMode(modeName) {
         }
         
         this.currentMode = modeName;
+
+        // Show/hide battlemap-specific elements
+        document.getElementById('battleSidebar').classList.toggle('hidden', modeName !== 'battlemap');
     }
 }
 }

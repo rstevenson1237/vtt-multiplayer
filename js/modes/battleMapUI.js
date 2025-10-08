@@ -61,12 +61,12 @@ static showTokenContextMenu(x, y, token, callbacks) {
                 <label>Initiative Bonus: <input type="number" id="editTokenInitBonus" value="${token.initiativeBonus || 0}"></label>
                 <label>Size: 
                     <select id="editTokenSize">
-                        <option value="15" ${token.size === 15 ? 'selected' : ''}>Tiny</option>
-                        <option value="20" ${token.size === 20 ? 'selected' : ''}>Small</option>
-                        <option value="25" ${(token.size === 25 || !token.size) ? 'selected' : ''}>Medium</option>
-                        <option value="37.5" ${token.size === 37.5 ? 'selected' : ''}>Large</option>
-                        <option value="50" ${token.size === 50 ? 'selected' : ''}>Huge</option>
-                        <option value="75" ${token.size === 75 ? 'selected' : ''}>Gargantuan</option>
+                        <option value="0.5" ${token.sizeMultiplier === 0.5 ? 'selected' : ''}>Tiny</option>
+                        <option value="0.8" ${token.sizeMultiplier === 0.8 ? 'selected' : ''}>Small</option>
+                        <option value="1" ${(token.sizeMultiplier === 1 || !token.sizeMultiplier) ? 'selected' : ''}>Medium</option>
+                        <option value="1.5" ${token.sizeMultiplier === 1.5 ? 'selected' : ''}>Large</option>
+                        <option value="2" ${token.sizeMultiplier === 2 ? 'selected' : ''}>Huge</option>
+                        <option value="3" ${token.sizeMultiplier === 3 ? 'selected' : ''}>Gargantuan</option>
                     </select>
                 </label>
                 <label>Color: <input type="color" id="editTokenColor" value="${token.color}"></label>
@@ -87,7 +87,7 @@ static showTokenContextMenu(x, y, token, callbacks) {
                 maxHp: parseInt(document.getElementById('editTokenMaxHP').value),
                 ac: parseInt(document.getElementById('editTokenAC').value),
                 initiativeBonus: parseInt(document.getElementById('editTokenInitBonus').value),
-                size: parseFloat(document.getElementById('editTokenSize').value),
+                sizeMultiplier: parseFloat(document.getElementById('editTokenSize').value),
                 color: document.getElementById('editTokenColor').value,
                 notes: document.getElementById('editTokenNotes').value
             };

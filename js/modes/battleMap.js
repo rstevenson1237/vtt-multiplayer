@@ -17,7 +17,7 @@ export class BattleMapMode {
         this.backgroundImage = null;
         this.backgroundData = {
             image: null,
-            fitMode: 'fit', // 'stretch', 'fit', 'fill', 'tile', 'original'
+            fitMode: 'fit',
             offsetX: 0,
             offsetY: 0,
             scale: 1,
@@ -29,17 +29,16 @@ export class BattleMapMode {
         this.currentTurn = null;
         this.combatActive = false;
 
-        // ADD: Drawing/annotation properties
+        // Drawing/annotation properties
         this.annotations = [];
         this.drawingTool = null;
         this.isAnnotating = false;
         this.penPath = [];
         
-        // ADD: Movement measurement
+        // Movement measurement
         this.showMovementDistance = true;
         this.movementStartPos = null;
         
-        // ADD: Fix for right-click movement
         this.rightClickHandled = false;
     }
 
@@ -57,6 +56,12 @@ export class BattleMapMode {
             this.tokens = tokens || {};
             this.draw();
             this.updateInitiativeTracker();
+        });
+
+        // Listen for annotations
+        this.sync.listenToData('battleMap/annotations', (annotations) => {
+            this.annotations = annotations || [];
+            this.draw();
         });
 
         // Listen for grid state
@@ -93,76 +98,69 @@ export class BattleMapMode {
         this.canvas.addEventListener('contextmenu', (e) => this.onRightClick(e));
     }
 
-// ADD THIS METHOD - Token Creation (around line 130, after initialize())
-async addToken() {
-    const name = prompt('Enter token name:');
-    if (!name) return;
+    async addToken() {
+        const name = prompt('Enter token name:');
+        if (!name) return;
 
-    // Calculate center of canvas for initial placement
-    const centerX = this.canvas.width / 2;
-    const centerY = this.canvas.height / 2;
-    
-    // Snap to grid center
-    let x, y;
-    if (this.showGrid) {
-        x = Math.round(centerX / this.gridSize) * this.gridSize + this.gridSize / 2;
-        y = Math.round(centerY / this.gridSize) * this.gridSize + this.gridSize / 2;
-    } else {
-        x = centerX;
-        y = centerY;
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2;
+        
+        let x, y;
+        if (this.showGrid) {
+            x = Math.round(centerX / this.gridSize) * this.gridSize + this.gridSize / 2;
+            y = Math.round(centerY / this.gridSize) * this.gridSize + this.gridSize / 2;
+        } else {
+            x = centerX;
+            y = centerY;
+        }
+
+        const tokenId = Date.now().toString();
+        const newToken = {
+            id: tokenId,
+            name: name,
+            x: x,
+            y: y,
+            sizeMultiplier: 1,
+            color: '#3498db',
+            hp: 10,
+            maxHp: 10,
+            ac: 10,
+            initiative: 0,
+            initiativeBonus: 0,
+            owner: this.currentUser.uid,
+            ownerName: this.currentUser.displayName || 'Player',
+            conditions: [],
+            notes: ''
+        };
+
+        await this.sync.updateField(`battleMap/tokens/${tokenId}`, newToken);
+        
+        this.selectedToken = tokenId;
+        this.updateSelectedTokenInfo();
+        this.draw();
+        
+        this.eventBus.emit('chat:message', {
+            content: `${this.currentUser.displayName} added token: ${name}`,
+            type: 'system'
+        });
     }
 
-    const tokenId = Date.now().toString();
-    const newToken = {
-        id: tokenId,
-        name: name,
-        x: x,
-        y: y,
-        size: 25, // Medium by default
-        color: '#3498db',
-        hp: 10,
-        maxHp: 10,
-        ac: 10,
-        initiative: 0,
-        initiativeBonus: 0,
-        owner: this.currentUser.uid,
-        ownerName: this.currentUser.displayName || 'Player',
-        conditions: [],
-        notes: ''
-    };
-
-    await this.sync.updateField(`battleMap/tokens/${tokenId}`, newToken);
-    
-    // Auto-select the new token
-    this.selectedToken = tokenId;
-    this.updateSelectedTokenInfo();
-    this.draw();
-    
-    this.eventBus.emit('chat:message', {
-        content: `${this.currentUser.displayName} added token: ${name}`,
-        type: 'system'
-    });
-}
-
-setupCanvas() {
-    this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
-    this.canvas.addEventListener('mousemove', (e) => {
-        // NEW: Track mouse position for hover detection
-        const rect = this.canvas.getBoundingClientRect();
-        this.lastMouseX = e.clientX - rect.left;
-        this.lastMouseY = e.clientY - rect.top;
+    setupCanvas() {
+        this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+        this.canvas.addEventListener('mousemove', (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            this.lastMouseX = e.clientX - rect.left;
+            this.lastMouseY = e.clientY - rect.top;
+            this.onMouseMove(e);
+        });
+        this.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
         
-        this.onMouseMove(e);
-    });
-    this.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
-    
-    // NEW: Add mouseleave to reset cursor
-    this.canvas.addEventListener('mouseleave', () => {
-        this.lastMouseX = undefined;
-        this.lastMouseY = undefined;
-        this.canvas.style.cursor = 'default';
-    });
-}
+        this.canvas.addEventListener('mouseleave', () => {
+            this.lastMouseX = undefined;
+            this.lastMouseY = undefined;
+            this.canvas.style.cursor = 'default';
+        });
+    }
 
     draw() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -175,11 +173,10 @@ setupCanvas() {
             this.drawGrid();
         }
         
-        this.drawAnnotations(); // ADD THIS
+        this.drawAnnotations();
         this.drawTokens();
         this.drawMeasurement();
         
-        // Draw current pen path
         if (this.penPath.length > 0) {
             this.ctx.save();
             this.ctx.strokeStyle = document.getElementById('drawColor').value;
@@ -211,12 +208,10 @@ setupCanvas() {
 
         switch (data.fitMode) {
             case 'stretch':
-                // Stretch to fill entire canvas
                 this.ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
                 break;
 
             case 'fit':
-                // Fit entire image, maintain aspect ratio, letterbox if needed
                 const fitRatio = Math.min(canvasWidth / imgWidth, canvasHeight / imgHeight);
                 const fitWidth = imgWidth * fitRatio * data.scale;
                 const fitHeight = imgHeight * fitRatio * data.scale;
@@ -226,7 +221,6 @@ setupCanvas() {
                 break;
 
             case 'fill':
-                // Fill entire canvas, maintain aspect ratio, crop if needed
                 const fillRatio = Math.max(canvasWidth / imgWidth, canvasHeight / imgHeight);
                 const fillWidth = imgWidth * fillRatio * data.scale;
                 const fillHeight = imgHeight * fillRatio * data.scale;
@@ -236,7 +230,6 @@ setupCanvas() {
                 break;
 
             case 'tile':
-                // Tile/repeat the image
                 const tileWidth = imgWidth * data.scale;
                 const tileHeight = imgHeight * data.scale;
                 for (let x = data.offsetX % tileWidth - tileWidth; x < canvasWidth; x += tileWidth) {
@@ -247,7 +240,6 @@ setupCanvas() {
                 break;
 
             case 'original':
-                // Original size, centered
                 const origX = (canvasWidth - imgWidth * data.scale) / 2 + data.offsetX;
                 const origY = (canvasHeight - imgHeight * data.scale) / 2 + data.offsetY;
                 this.ctx.drawImage(img, origX, origY, imgWidth * data.scale, imgHeight * data.scale);
@@ -278,99 +270,95 @@ setupCanvas() {
 
     drawTokens() {
         Object.entries(this.tokens).forEach(([id, token]) => {
-            // Calculate token size based on grid
-            const relativeSize = this.getTokenSizeInPixels(token.size || 'medium');
+            const radius = (token.sizeMultiplier || 1) * this.gridSize / 2;
             
+            // Draw token circle
             this.ctx.fillStyle = token.color || '#3498db';
             this.ctx.beginPath();
-            this.ctx.arc(token.x, token.y, relativeSize, 0, Math.PI * 2);
-            // ... rest of drawing code
+            this.ctx.arc(token.x, token.y, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            // Draw selection highlight
+            if (this.selectedToken === id) {
+                this.ctx.strokeStyle = '#f39c12';
+                this.ctx.lineWidth = 3;
+                this.ctx.stroke();
+            }
+            
+            // Draw border
+            this.ctx.strokeStyle = '#2c3e50';
+            this.ctx.lineWidth = 2;
+            this.ctx.stroke();
+            
+            // Draw token name
+            this.ctx.fillStyle = 'white';
+            this.ctx.font = 'bold 12px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(token.name, token.x, token.y);
+            
+            // Draw HP bar
+            if (token.hp !== undefined && token.maxHp) {
+                const barWidth = radius * 2;
+                const barHeight = 4;
+                const barX = token.x - radius;
+                const barY = token.y + radius + 5;
+                
+                // Background
+                this.ctx.fillStyle = '#e74c3c';
+                this.ctx.fillRect(barX, barY, barWidth, barHeight);
+                
+                // HP fill
+                const hpPercent = token.hp / token.maxHp;
+                this.ctx.fillStyle = hpPercent > 0.5 ? '#27ae60' : hpPercent > 0.25 ? '#f39c12' : '#e74c3c';
+                this.ctx.fillRect(barX, barY, barWidth * hpPercent, barHeight);
+            }
+            
+            // Draw current turn indicator
+            if (this.combatActive && this.currentTurn === id) {
+                this.ctx.strokeStyle = '#27ae60';
+                this.ctx.lineWidth = 4;
+                this.ctx.setLineDash([5, 5]);
+                this.ctx.beginPath();
+                this.ctx.arc(token.x, token.y, radius + 5, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+            }
+            
+            // Draw conditions
+            if (token.conditions && token.conditions.length > 0) {
+                this.ctx.fillStyle = 'rgba(155, 89, 182, 0.8)';
+                this.ctx.font = '10px Arial';
+                this.ctx.fillText(token.conditions.length + ' status', token.x, token.y - radius - 8);
+            }
         });
     }
 
-    getTokenSizeInPixels(size) {
-        // Map token sizes to grid squares
-        const sizeMap = {
-            'tiny': 0.25,
-            'small': 0.4,
-            'medium': 0.5,
-            'large': 0.75,
-            'huge': 1,
-            'gargantuan': 1.5
-        };
-        
-        const gridMultiplier = sizeMap[size] || sizeMap['medium'];
-        return this.gridSize * gridMultiplier;
-    }
-
-    startMeasure() {
-        this.measuring = true;
-        this.canvas.style.cursor = 'crosshair';
-    }
-
-// ADD THIS METHOD - Toggle Grid (around line 180)
-async toggleGrid() {
-    this.showGrid = !this.showGrid;
-    await this.sync.syncData('battleMap/showGrid', this.showGrid);
-    this.draw();
-    
-    // Update button text
-    const btn = document.querySelector('[onclick="battleMap.toggleGrid()"]');
-    if (btn) {
-        btn.textContent = this.showGrid ? 'Hide Grid' : 'Show Grid';
-    }
-}
-
-// ADD THIS METHOD - Clear Selection (around line 195)
-clearSelection() {
-    this.selectedToken = null;
-    this.updateSelectedTokenInfo();
-    this.draw();
-}
-
-// ADD THIS METHOD - Roll Dice (around line 203)
-rollDice() {
-    const diceType = document.getElementById('diceType').value;
-    const diceCount = parseInt(document.getElementById('diceCount').value) || 1;
-    const modifier = parseInt(document.getElementById('diceModifier').value) || 0;
-    
-    const rolls = [];
-    let total = modifier;
-    
-    // Extract the number from dice type (e.g., "d20" -> 20)
-    const sides = parseInt(diceType.substring(1));
-    
-    for (let i = 0; i < diceCount; i++) {
-        const roll = Math.floor(Math.random() * sides) + 1;
-        rolls.push(roll);
-        total += roll;
-    }
-    
-    // Emit to chat
-    this.eventBus.emit('chat:diceRoll', {
-        roller: this.currentUser.displayName || 'Player',
-        type: diceType,
-        count: diceCount,
-        modifier: modifier,
-        rolls: rolls,
-        total: total
-    });
-    
-    // Visual feedback
-    const diceBtn = document.querySelector('[onclick="battleMap.rollDice()"]');
-    if (diceBtn) {
-        diceBtn.classList.add('dice-rolling');
-        setTimeout(() => diceBtn.classList.remove('dice-rolling'), 500);
-    }
-}
-
-    calculateDistance(x1, y1, x2, y2) {
-        const dx = Math.abs(x2 - x1);
-        const dy = Math.abs(y2 - y1);
-        const pixels = Math.sqrt(dx * dx + dy * dy);
-        const squares = pixels / this.gridSize;
-        const feet = squares * 5; // Assuming 5ft squares
-        return { feet, squares, pixels };
+    drawAnnotations() {
+        this.annotations.forEach(ann => {
+            this.ctx.save();
+            
+            if (ann.type === 'pen') {
+                this.ctx.strokeStyle = ann.color;
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                ann.path.forEach((point, i) => {
+                    if (i === 0) {
+                        this.ctx.moveTo(point.x, point.y);
+                    } else {
+                        this.ctx.lineTo(point.x, point.y);
+                    }
+                });
+                this.ctx.stroke();
+                
+            } else if (ann.type === 'text') {
+                this.ctx.fillStyle = ann.color;
+                this.ctx.font = '16px Arial';
+                this.ctx.fillText(ann.text, ann.x, ann.y);
+            }
+            
+            this.ctx.restore();
+        });
     }
 
     drawMeasurement() {
@@ -387,7 +375,6 @@ rollDice() {
 
         this.ctx.setLineDash([]);
 
-        // Draw distance label
         const midX = (this.measureStart.x + this.measureEnd.x) / 2;
         const midY = (this.measureStart.y + this.measureEnd.y) / 2;
         const dist = this.calculateDistance(
@@ -399,6 +386,73 @@ rollDice() {
         this.ctx.font = 'bold 14px Arial';
         this.ctx.textAlign = 'center';
         this.ctx.fillText(`${Math.round(dist.feet)} ft`, midX, midY - 10);
+    }
+
+    async toggleGrid() {
+        this.showGrid = !this.showGrid;
+        await this.sync.syncData('battleMap/showGrid', this.showGrid);
+        this.draw();
+    }
+
+    rollDice() {
+        const diceType = document.getElementById('diceType').value;
+        const diceCount = parseInt(document.getElementById('diceCount').value) || 1;
+        const modifier = parseInt(document.getElementById('diceModifier').value) || 0;
+        
+        const rolls = [];
+        let total = modifier;
+        
+        const sides = parseInt(diceType.substring(1));
+        
+        for (let i = 0; i < diceCount; i++) {
+            const roll = Math.floor(Math.random() * sides) + 1;
+            rolls.push(roll);
+            total += roll;
+        }
+        
+        this.eventBus.emit('chat:diceRoll', {
+            roller: this.currentUser.displayName || 'Player',
+            type: diceType,
+            count: diceCount,
+            modifier: modifier,
+            rolls: rolls,
+            total: total
+        });
+    }
+
+    selectDrawTool(tool) {
+        if (this.drawingTool === tool) {
+            this.drawingTool = null;
+            this.canvas.style.cursor = 'default';
+        } else {
+            this.drawingTool = tool;
+            this.canvas.style.cursor = tool === 'pen' ? 'crosshair' : 'text';
+        }
+        
+        document.querySelectorAll('[data-draw-tool]').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.drawTool === this.drawingTool);
+        });
+    }
+
+    async clearAnnotations() {
+        if (confirm('Clear all annotations?')) {
+            this.annotations = [];
+            await this.sync.syncData('battleMap/annotations', []);
+        }
+    }
+
+    startMeasure() {
+        this.measuring = true;
+        this.canvas.style.cursor = 'crosshair';
+    }
+
+    calculateDistance(x1, y1, x2, y2) {
+        const dx = Math.abs(x2 - x1);
+        const dy = Math.abs(y2 - y1);
+        const pixels = Math.sqrt(dx * dx + dy * dy);
+        const squares = pixels / this.gridSize;
+        const feet = squares * 5;
+        return { feet, squares, pixels };
     }
 
     async loadBackground(backgroundData) {
@@ -438,7 +492,6 @@ rollDice() {
     }
 
     async uploadBackground() {
-        // Create file input element
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
@@ -447,17 +500,14 @@ rollDice() {
             const file = e.target.files[0];
             if (!file) return;
 
-            // Show loading indicator
             this.eventBus.emit('chat:message', {
                 content: '⏳ Uploading background image...',
                 type: 'system'
             });
 
             try {
-                // Convert to base64 and compress
                 const base64 = await this.compressAndConvertImage(file);
 
-                // Store in Firebase
                 await this.sync.syncData('battleMap/background', {
                     data: base64,
                     name: file.name,
@@ -491,12 +541,10 @@ rollDice() {
                 const img = new Image();
 
                 img.onload = () => {
-                    // Create canvas for compression
                     const canvas = document.createElement('canvas');
                     let width = img.width;
                     let height = img.height;
 
-                    // Calculate new dimensions while preserving aspect ratio
                     if (width > maxWidth || height > maxHeight) {
                         const ratio = Math.min(maxWidth / width, maxHeight / height);
                         width = width * ratio;
@@ -506,14 +554,11 @@ rollDice() {
                     canvas.width = width;
                     canvas.height = height;
 
-                    // Draw and compress
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    // Convert to base64
                     const base64 = canvas.toDataURL('image/jpeg', quality);
 
-                    // Check size (Firebase has limits)
                     const sizeInMB = (base64.length * 3 / 4) / (1024 * 1024);
                     if (sizeInMB > 10) {
                         reject(new Error('Image too large. Please use a smaller image or lower quality.'));
@@ -531,38 +576,7 @@ rollDice() {
         });
     }
 
-    async uploadBackgroundFromURL() {
-        const url = prompt('Enter background image URL:');
-        if (!url) return;
 
-        try {
-            // Load image to convert to base64
-            const response = await fetch(url);
-            const blob = await response.blob();
-            const base64 = await this.compressAndConvertImage(blob);
-
-            await this.sync.syncData('battleMap/background', {
-                data: base64,
-                name: 'External Image',
-                fitMode: 'fit',
-                offsetX: 0,
-                offsetY: 0,
-                scale: 1,
-                opacity: 1,
-                uploadedBy: this.currentUser.displayName,
-                uploadedAt: Date.now()
-            });
-        } catch (error) {
-            console.error('Error loading URL:', error);
-            alert('Failed to load image from URL. Check CORS/URL validity.');
-        }
-    }
-
-    async clearBackground() {
-        this.backgroundImage = null;
-        await this.sync.removeItem('battleMap/background');
-        this.draw();
-    }
 
     onRightClick(e) {
         e.preventDefault();
@@ -570,11 +584,11 @@ rollDice() {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         
-        // Find clicked token
         let clickedTokenId = null;
         Object.entries(this.tokens).forEach(([id, token]) => {
+            const radius = (token.sizeMultiplier || 1) * this.gridSize / 2;
             const dist = Math.sqrt((x - token.x) ** 2 + (y - token.y) ** 2);
-            if (dist <= (token.size || 25)) {
+            if (dist <= radius) {
                 clickedTokenId = id;
             }
         });
@@ -592,60 +606,52 @@ rollDice() {
         }
     }
 
-    showBackgroundSettings() {
-        if (!this.backgroundImage) {
-            alert('No background image loaded. Upload one first!');
-            return;
+    showBattleMapSettings() {
+        document.getElementById('battleMapSettings').classList.remove('hidden');
+        this.setupSettingsModal();
+    }
+
+    migrateTokenSizes() {
+        let wasMigrationNeeded = false;
+        const updates = {};
+        Object.entries(this.tokens).forEach(([id, token]) => {
+            if (token.size && !token.sizeMultiplier) {
+                wasMigrationNeeded = true;
+                const newMultiplier = token.size / 25; // Assuming old default grid size of 50, so medium token size was 25
+                updates[`${id}/sizeMultiplier`] = newMultiplier;
+                updates[`${id}/size`] = null; // Remove the old size property
+            }
+        });
+
+        if (wasMigrationNeeded) {
+            this.sync.db.ref(`games/${this.gameId}/state/battleMap/tokens`).update(updates);
+        }
+    }
+
+    setupSettingsModal() {
+        // Tab switching
+        const tabs = document.querySelectorAll('.settings-tabs .tab-btn');
+        const tabContents = document.querySelectorAll('.settings-modal .tab-content');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const tabName = tab.dataset.tab;
+                tabContents.forEach(content => {
+                    content.classList.toggle('hidden', content.id !== `${tabName}Tab`);
+                });
+            });
+        });
+
+        // Background settings
+        if (this.backgroundImage) {
+            document.getElementById('bgFitMode').value = this.backgroundData.fitMode;
+            document.getElementById('bgScale').value = this.backgroundData.scale * 100;
+            document.getElementById('bgOpacity').value = this.backgroundData.opacity * 100;
+            document.getElementById('bgOffsetX').value = this.backgroundData.offsetX;
+            document.getElementById('bgOffsetY').value = this.backgroundData.offsetY;
         }
 
-        const dialog = document.createElement('div');
-        dialog.className = 'modal';
-        dialog.innerHTML = `
-            <div class="modal-content background-settings-dialog">
-                <h3>Background Settings</h3>
-
-                <label>
-                    Fit Mode:
-                    <select id="bgFitMode">
-                        <option value="stretch" ${this.backgroundData.fitMode === 'stretch' ? 'selected' : ''}>Stretch (Fill canvas, distort)</option>
-                        <option value="fit" ${this.backgroundData.fitMode === 'fit' ? 'selected' : ''}>Fit (Show all, letterbox)</option>
-                        <option value="fill" ${this.backgroundData.fitMode === 'fill' ? 'selected' : ''}>Fill (Cover canvas, crop)</option>
-                        <option value="tile" ${this.backgroundData.fitMode === 'tile' ? 'selected' : ''}>Tile (Repeat)</option>
-                        <option value="original" ${this.backgroundData.fitMode === 'original' ? 'selected' : ''}>Original Size</option>
-                    </select>
-                </label>
-
-                <label>
-                    Scale: <span id="bgScaleValue">${(this.backgroundData.scale * 100).toFixed(0)}%</span>
-                    <input type="range" id="bgScale" min="10" max="300" value="${this.backgroundData.scale * 100}" step="5">
-                </label>
-
-                <label>
-                    Opacity: <span id="bgOpacityValue">${(this.backgroundData.opacity * 100).toFixed(0)}%</span>
-                    <input type="range" id="bgOpacity" min="0" max="100" value="${this.backgroundData.opacity * 100}" step="5">
-                </label>
-
-                <label>
-                    Horizontal Offset: <span id="bgOffsetXValue">${this.backgroundData.offsetX}px</span>
-                    <input type="range" id="bgOffsetX" min="-500" max="500" value="${this.backgroundData.offsetX}" step="10">
-                </label>
-
-                <label>
-                    Vertical Offset: <span id="bgOffsetYValue">${this.backgroundData.offsetY}px</span>
-                    <input type="range" id="bgOffsetY" min="-500" max="500" value="${this.backgroundData.offsetY}" step="10">
-                </label>
-
-                <div class="dialog-buttons">
-                    <button onclick="this.closest('.modal').remove()">Cancel</button>
-                    <button class="secondary" id="resetBgSettings">Reset</button>
-                    <button class="primary" id="saveBgSettings">Apply</button>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(dialog);
-
-        // Live preview
         const updatePreview = () => {
             this.backgroundData.fitMode = document.getElementById('bgFitMode').value;
             this.backgroundData.scale = document.getElementById('bgScale').value / 100;
@@ -673,17 +679,15 @@ rollDice() {
             this.backgroundData.opacity = 1;
             this.backgroundData.offsetX = 0;
             this.backgroundData.offsetY = 0;
-            dialog.remove();
+            document.getElementById('battleMapSettings').classList.add('hidden');
             this.draw();
         };
 
         document.getElementById('saveBgSettings').onclick = async () => {
-            // Get current background data from Firebase
             const currentBg = await this.sync.db.ref(
                 `games/${this.gameId}/state/battleMap/background`
             ).once('value').then(s => s.val());
 
-            // Update with new settings
             await this.sync.syncData('battleMap/background', {
                 ...currentBg,
                 fitMode: this.backgroundData.fitMode,
@@ -693,24 +697,205 @@ rollDice() {
                 offsetY: this.backgroundData.offsetY
             });
 
-            dialog.remove();
+            document.getElementById('battleMapSettings').classList.add('hidden');
         };
-    }
 
-    async alignGridToBackground() {
-        if (!this.backgroundImage) {
-            alert('Load a background image first!');
-            return;
+        // Grid size slider
+        const gridSizeSlider = document.getElementById('gridSizeSlider');
+        const gridSizeValue = document.getElementById('gridSizeValue');
+        if (gridSizeSlider) {
+            gridSizeSlider.value = this.gridSize;
+            gridSizeValue.textContent = `${this.gridSize}px`;
+
+            gridSizeSlider.addEventListener('input', () => {
+                gridSizeValue.textContent = `${gridSizeSlider.value}px`;
+            });
+
+            gridSizeSlider.addEventListener('change', () => {
+                this.migrateTokenSizes(); // Migrate old token sizes first
+                const newSize = parseInt(gridSizeSlider.value, 10);
+                this.gridSize = newSize;
+                this.sync.syncData('battleMap/gridSize', newSize);
+                this.draw();
+            });
         }
 
-        const squareSize = prompt('Enter grid square size in pixels:', this.gridSize);
-        if (squareSize && !isNaN(squareSize)) {
-            this.gridSize = parseInt(squareSize);
-            await this.sync.syncData('battleMap/gridSize', this.gridSize);
+        // Show grid checkbox
+        const showGridCheckbox = document.getElementById('showGridCheckbox');
+        if (showGridCheckbox) {
+            showGridCheckbox.checked = this.showGrid;
+            showGridCheckbox.addEventListener('change', () => {
+                this.toggleGrid();
+            });
+        }
+    }
+
+    onMouseDown(e) {
+        if (e.button === 2) {
+            this.rightClickHandled = true;
+            return;
+        }
+        
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        if (this.measuring) {
+            if (!this.measureStart) {
+                this.measureStart = { x, y };
+            } else {
+                this.measureEnd = { x, y };
+                this.draw();
+                setTimeout(() => {
+                    this.measuring = false;
+                    this.measureStart = null;
+                    this.measureEnd = null;
+                    this.canvas.style.cursor = 'default';
+                    this.draw();
+                }, 2000);
+            }
+            return;
+        }
+        
+        if (this.drawingTool === 'pen') {
+            this.startPenDrawing(x, y);
+            return;
+        } else if (this.drawingTool === 'text') {
+            this.addTextAnnotation(x, y);
+            return;
+        } else if (this.drawingTool === 'eraser') {
+            this.eraseAnnotationAt(x, y);
+            return;
+        }
+        
+        let clickedToken = null;
+        Object.entries(this.tokens).forEach(([id, token]) => {
+            const radius = (token.sizeMultiplier || 1) * this.gridSize / 2;
+            const dist = Math.sqrt((x - token.x) ** 2 + (y - token.y) ** 2);
+            if (dist <= radius) {
+                clickedToken = id;
+            }
+        });
+        
+        if (clickedToken) {
+            this.selectedToken = clickedToken;
+            this.isDrawing = true;
+            this.movementStartPos = { 
+                x: this.tokens[clickedToken].x, 
+                y: this.tokens[clickedToken].y 
+            };
+            this.updateSelectedTokenInfo();
+        } else {
+            this.selectedToken = null;
+            this.updateSelectedTokenInfo();
+        }
+        
+        this.draw();
+    }
+
+    onMouseMove(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        if (this.measuring && this.measureStart) {
+            this.measureEnd = { x, y };
+            this.draw();
+        }
+        
+        if (this.isDrawing && this.selectedToken) {
+            const token = this.tokens[this.selectedToken];
+            if (this.showGrid) {
+                token.x = Math.floor(x / this.gridSize) * this.gridSize + this.gridSize / 2;
+                token.y = Math.floor(y / this.gridSize) * this.gridSize + this.gridSize / 2;
+            } else {
+                token.x = x;
+                token.y = y;
+            }
+            this.draw();
+        }
+        
+        if (this.isAnnotating && this.drawingTool === 'pen') {
+            this.penPath.push({ x, y });
             this.draw();
         }
     }
 
+    async onMouseUp(e) {
+        if (this.isAnnotating && this.drawingTool === 'pen') {
+            this.finishPenDrawing();
+        }
+        
+        if (this.isDrawing && this.selectedToken) {
+            const token = this.tokens[this.selectedToken];
+            await this.sync.updateField(`battleMap/tokens/${this.selectedToken}`, {
+                x: token.x,
+                y: token.y
+            });
+        }
+        this.isDrawing = false;
+        this.movementStartPos = null;
+    }
+
+    startPenDrawing(x, y) {
+        this.isAnnotating = true;
+        this.penPath = [{ x, y }];
+    }
+
+    finishPenDrawing() {
+        if (this.penPath.length > 1) {
+            const annotation = {
+                type: 'pen',
+                path: [...this.penPath],
+                color: document.getElementById('drawColor').value,
+                id: Date.now().toString()
+            };
+            this.annotations.push(annotation);
+            this.syncAnnotations();
+        }
+        this.penPath = [];
+        this.isAnnotating = false;
+    }
+
+    addTextAnnotation(x, y) {
+        const text = prompt('Enter text:');
+        if (text) {
+            const annotation = {
+                type: 'text',
+                x, y,
+                text,
+                color: document.getElementById('drawColor').value,
+                id: Date.now().toString()
+            };
+            this.annotations.push(annotation);
+            this.syncAnnotations();
+        }
+    }
+
+    eraseAnnotationAt(x, y) {
+        const tolerance = 10;
+        const toRemove = this.annotations.findIndex(ann => {
+            if (ann.type === 'text') {
+                const dist = Math.sqrt((x - ann.x) ** 2 + (y - ann.y) ** 2);
+                return dist < tolerance;
+            } else if (ann.type === 'pen') {
+                return ann.path.some(point => {
+                    const dist = Math.sqrt((x - point.x) ** 2 + (y - point.y) ** 2);
+                    return dist < tolerance;
+                });
+            }
+            return false;
+        });
+        
+        if (toRemove !== -1) {
+            this.annotations.splice(toRemove, 1);
+            this.syncAnnotations();
+        }
+    }
+
+    async syncAnnotations() {
+        await this.sync.syncData('battleMap/annotations', this.annotations);
+    }
 
     async editToken(tokenId) {
         const token = this.tokens[tokenId];
@@ -728,7 +913,6 @@ rollDice() {
         BattleMapUI.showHPAdjustDialog(token, async (newHP) => {
             await this.sync.updateField(`battleMap/tokens/${tokenId}`, { hp: newHP });
             
-            // Send HP change to chat
             this.eventBus.emit('chat:message', {
                 content: `${token.name}'s HP: ${token.hp} → ${newHP}`,
                 type: 'system'
@@ -814,7 +998,6 @@ rollDice() {
     }
 
     async startCombat() {
-        // Sort by initiative
         const sorted = Object.entries(this.tokens)
             .sort(([, a], [, b]) => (b.initiative || 0) - (a.initiative || 0));
 
@@ -907,169 +1090,10 @@ rollDice() {
         this.draw();
     }
 
-    onMouseDown(e) {
-        // Ignore right-click for movement
-        if (e.button === 2) {
-            this.rightClickHandled = true;
-            return;
-        }
-        
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        
-        // Handle drawing tools
-        if (this.drawingTool === 'pen') {
-            this.startPenDrawing(x, y);
-            return;
-        } else if (this.drawingTool === 'text') {
-            this.addTextAnnotation(x, y);
-            return;
-        }
-        
-        // ... existing token selection code ...
-        
-        // ADDITION: Store start position for movement measurement
-        if (clickedToken) {
-            this.movementStartPos = { 
-                x: this.tokens[clickedToken].x, 
-                y: this.tokens[clickedToken].y 
-            };
-        }
-    }
-
-    onMouseMove(e) {
-        // ... existing code ...
-        
-        if (this.isDrawing && this.selectedToken && this.movementStartPos) {
-            // Draw movement measurement
-            this.drawMovementPath(
-                this.movementStartPos.x, 
-                this.movementStartPos.y,
-                x, y
-            );
-        }
-        
-        // Handle pen drawing
-        if (this.isAnnotating && this.drawingTool === 'pen') {
-            this.penPath.push({ x, y });
-            this.draw();
-        }
-    }
-
-    drawMovementPath(startX, startY, endX, endY) {
-        // Draw line and distance during token movement
-        this.ctx.save();
-        this.ctx.strokeStyle = 'rgba(52, 152, 219, 0.5)';
-        this.ctx.lineWidth = 2;
-        this.ctx.setLineDash([5, 5]);
-        
-        this.ctx.beginPath();
-        this.ctx.moveTo(startX, startY);
-        this.ctx.lineTo(endX, endY);
-        this.ctx.stroke();
-        
-        // Calculate and display distance
-        const dist = this.calculateDistance(startX, startY, endX, endY);
-        const midX = (startX + endX) / 2;
-        const midY = (startY + endY) / 2;
-        
-        // Draw distance label
-        this.ctx.fillStyle = 'white';
-        this.ctx.strokeStyle = 'black';
-        this.ctx.lineWidth = 3;
-        this.ctx.font = 'bold 14px Arial';
-        this.ctx.textAlign = 'center';
-        
-        const distText = `${Math.round(dist.feet)} ft`;
-        this.ctx.strokeText(distText, midX, midY - 10);
-        this.ctx.fillText(distText, midX, midY - 10);
-        
-        this.ctx.restore();
-    }
-
-    // ADD: Pen tool implementation
-    startPenDrawing(x, y) {
-        this.isAnnotating = true;
-        this.penPath = [{ x, y }];
-    }
-
-    finishPenDrawing() {
-        if (this.penPath.length > 1) {
-            const annotation = {
-                type: 'pen',
-                path: [...this.penPath],
-                color: document.getElementById('drawColor').value,
-                id: Date.now().toString()
-            };
-            this.annotations.push(annotation);
-            this.syncAnnotations();
-        }
-        this.penPath = [];
-        this.isAnnotating = false;
-    }
-
-    // ADD: Text tool implementation
-    addTextAnnotation(x, y) {
-        const text = prompt('Enter text:');
-        if (text) {
-            const annotation = {
-                type: 'text',
-                x, y,
-                text,
-                color: document.getElementById('drawColor').value,
-                id: Date.now().toString()
-            };
-            this.annotations.push(annotation);
-            this.syncAnnotations();
-        }
-    }
-
-    // ADD: Draw annotations
-    drawAnnotations() {
-        this.annotations.forEach(ann => {
-            this.ctx.save();
-            
-            if (ann.type === 'pen') {
-                this.ctx.strokeStyle = ann.color;
-                this.ctx.lineWidth = 2;
-                this.ctx.beginPath();
-                ann.path.forEach((point, i) => {
-                    if (i === 0) {
-                        this.ctx.moveTo(point.x, point.y);
-                    } else {
-                        this.ctx.lineTo(point.x, point.y);
-                    }
-                });
-                this.ctx.stroke();
-                
-            } else if (ann.type === 'text') {
-                this.ctx.fillStyle = ann.color;
-                this.ctx.font = '16px Arial';
-                this.ctx.fillText(ann.text, ann.x, ann.y);
-            }
-            
-            this.ctx.restore();
-        });
-    }
-
-    async onMouseUp(e) {
-        if (this.isDrawing && this.selectedToken) {
-            const token = this.tokens[this.selectedToken];
-            // Sync final position to Firebase
-            await this.sync.updateField(`battleMap/tokens/${this.selectedToken}`, {
-                x: token.x,
-                y: token.y
-            });
-        }
-        this.isDrawing = false;
-    }
-
     updateInitiativeTracker() {
         const list = document.getElementById('initiativeList');
         list.innerHTML = '';
         
-        // Sort tokens by initiative
         const sortedTokens = Object.entries(this.tokens)
             .sort(([, a], [, b]) => (b.initiative || 0) - (a.initiative || 0));
         
@@ -1085,8 +1109,12 @@ rollDice() {
                 this.updateSelectedTokenInfo();
             };
             
-            if (this.selectedToken === id) {
+            if (this.combatActive && this.currentTurn === id) {
                 li.classList.add('current-turn');
+            }
+            
+            if (this.selectedToken === id) {
+                li.classList.add('selected-token');
             }
             
             list.appendChild(li);
@@ -1097,7 +1125,12 @@ rollDice() {
         const infoDiv = document.getElementById('selectedTokenInfo');
         
         if (!this.selectedToken || !this.tokens[this.selectedToken]) {
-            infoDiv.innerHTML = 'No token selected';
+            infoDiv.innerHTML = `
+                <em>No token selected</em>
+                <p style="font-size: 0.85rem; margin-top: 0.5rem; color: #666;">
+                    💡 Right-click any token for options
+                </p>
+            `;
             return;
         }
         
@@ -1105,9 +1138,10 @@ rollDice() {
         infoDiv.innerHTML = `
             <div><strong>${token.name}</strong></div>
             <div>HP: ${token.hp}/${token.maxHp}</div>
+            <div>AC: ${token.ac || 10}</div>
             <div>Initiative: ${token.initiative || 0}</div>
-            <div>Position: (${Math.round(token.x)}, ${Math.round(token.y)})</div>
-            <div>Owner: ${token.ownerName || 'Unknown'}</div>
+            ${token.conditions && token.conditions.length > 0 ? 
+                `<div>Status: ${token.conditions.join(', ')}</div>` : ''}
         `;
     }
 
@@ -1119,12 +1153,5 @@ rollDice() {
 
     cleanup() {
         // Cleanup is handled by RealtimeSync
-    }
-
-    // ADD: Settings modal management
-    openSettings() {
-        document.getElementById('battleMapSettings').classList.remove('hidden');
-        // Load current settings into modal
-        this.loadSettingsToModal();
     }
 }
